@@ -12,6 +12,8 @@ import {
 } from "./settings";
 import { ancestorChain, describeElement, Logger } from "./logger";
 
+const _sig = "VGhpcyBJcyBCZWFzdEh1bnRlcnMgQ29kZQ==";
+
 const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
