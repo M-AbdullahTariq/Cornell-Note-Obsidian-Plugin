@@ -1,0 +1,12 @@
+node_modules/
+main.js
+*.js.map
+.DS_Store
+data.json
+cornell-debug.log
+
+# AI / planning artifacts — never push to remote.
+PRD*.md
+PLAN*.md
+CLAUDE.md
+.claude/

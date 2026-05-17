@@ -1,0 +1,237 @@
+/*
+ * Cornell Notes Plugin — styles
+ * Activated by `cssclasses: cornell-note` (or legacy `cssclass: cornell-note`)
+ * in a file's frontmatter. Obsidian propagates the class to several view-level
+ * elements depending on mode, so we use `.cornell-note` as a permissive
+ * ancestor selector rather than scoping to a specific view container.
+ */
+
+:root {
+  --cue-width: 120px;
+  --cue-gap: 20px;
+  --cue-line-color: lightgrey;
+  --cue-line-thickness: 1px;
+  --cue-line: var(--cue-line-thickness) solid var(--cue-line-color);
+  --cue-column-offset: calc(var(--cue-width) + var(--cue-gap));
+}
+
+/* =====================================================================
+ * Shared cue / summary callout styling (Reading view + Live Preview)
+ * ===================================================================== */
+
+.cornell-note .callout[data-callout="cue"] {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  mix-blend-mode: normal;
+  /* Hard-clamp the cue to the cue column. Without box-sizing: border-box
+   * the cue could exceed --cue-width due to inherited padding/border, and
+   * its text could then visually overlap body content in Live Preview. */
+  box-sizing: border-box;
+  max-width: var(--cue-width);
+  width: var(--cue-width);
+  overflow: hidden;
+}
+
+.cornell-note .callout[data-callout="cue"] .callout-icon {
+  display: none;
+}
+
+/* Obsidian's default `.callout-title` is `display: flex` — that keeps the
+ * title-inner from wrapping and causes long cues to overflow past --cue-width.
+ * Reset to block so text wraps inside the column. */
+.cornell-note .callout[data-callout="cue"] .callout-title {
+  display: block;
+  padding: 0;
+  background: transparent;
+  color: var(--text-normal);
+  gap: 0;
+}
+
+.cornell-note .callout[data-callout="cue"] .callout-title-inner {
+  font-style: italic;
+  font-family: var(--font-text);
+  font-size: var(--font-adaptive-normal);
+  font-weight: 700;
+  line-height: var(--line-height);
+  padding: 0 8px 0 0;
+  color: var(--text-normal);
+}
+
+.cornell-note .callout[data-callout="cue"] .callout-content,
+.cornell-note .callout[data-callout="cue"] .callout-content > p {
+  font-style: italic;
+  font-family: var(--font-text);
+  font-size: var(--font-adaptive-normal);
+  font-weight: var(--normal-weight);
+  line-height: var(--line-height);
+  padding: 0 8px 0 0;
+  margin: 0;
+  color: var(--text-normal);
+}
+
+/* Summary callout: strip all chrome so it renders as plain body text. */
+.cornell-note .callout[data-callout="summary"] {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  mix-blend-mode: normal;
+}
+
+.cornell-note .callout[data-callout="summary"] .callout-title {
+  display: none;
+}
+
+.cornell-note .callout[data-callout="summary"] .callout-content,
+.cornell-note .callout[data-callout="summary"] .callout-content > p {
+  padding: 0;
+  margin: 0;
+  color: var(--text-normal);
+}
+
+/* =====================================================================
+ * Reading view layout
+ * ===================================================================== */
+
+.cornell-note .markdown-preview-sizer {
+  position: relative;
+  padding-left: var(--cue-column-offset);
+}
+
+/* Vertical divider line + small left padding on body blocks. The summary
+ * section is excluded so the divider visually stops above the horizontal
+ * rule that separates the body from the summary. */
+.cornell-note .markdown-preview-sizer > div:has(p, ul, ol, pre, blockquote):not(:has(.callout[data-callout="summary"])) {
+  border-left: var(--cue-line);
+  padding-left: 15px;
+}
+
+/* Position cue callouts in the left margin (reserved by sizer padding). */
+.cornell-note .markdown-preview-sizer .callout[data-callout="cue"] {
+  position: absolute;
+  left: 15px;
+}
+
+/* =====================================================================
+ * Live Preview (CodeMirror 6) layout
+ *
+ * In modern CM6, rendered callouts live in `.cm-embed-block.cm-callout` as a
+ * direct child of `.cm-content` — they are NOT inside `.cm-line`. Selectors
+ * here target that structure.
+ * ===================================================================== */
+
+.cornell-note .cm-editor {
+  position: relative;
+}
+
+/* Push body content right so the cue column has reserved space. CM6 defaults
+ * set padding on .cm-content, so we need !important to win the cascade.
+ * Also make .cm-content the positioning context for absolute cue callouts. */
+.cornell-note .cm-content {
+  padding-left: var(--cue-column-offset) !important;
+  position: relative;
+  /* Defensive: prevent any inherited overflow/clip from hiding cues that */
+  /* land in the padding area on the left. */
+  overflow: visible !important;
+}
+
+/* Per-line divider — matches Reading view's per-wrapper `border-left`.
+ * Only body-content lines (paragraphs, lists, code, blockquotes) get the
+ * decoration class, so the divider breaks at blank lines, headings, the
+ * horizontal rule, and the summary section — same boundaries Reading view
+ * breaks at. */
+.cornell-note .cm-line.cornell-body-line {
+  border-left: var(--cue-line);
+  padding-left: 15px;
+}
+
+/* Blank source lines between a cue and its anchor body block: collapse
+ * them so the cue's embed-block (which sits at min-height: 0 below) lands
+ * on the same row as the anchor. The active-line override restores full
+ * height so the user can still place the cursor and edit. */
+.cornell-note .cm-line.cornell-collapsed-gap {
+  height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.cornell-note .cm-line.cornell-collapsed-gap.cm-active {
+  height: auto;
+  min-height: 1em;
+  overflow: visible;
+}
+
+/* Defeat any potential clipping on intermediate CM6 wrappers — but DO NOT
+ * touch .cm-scroller's overflow: it is the scrollable element in CM6 and
+ * forcing overflow: visible on it disables vertical scrolling entirely. */
+.cornell-note .cm-contentContainer,
+.cornell-note .cm-sizer {
+  overflow: visible !important;
+  contain: none !important;
+}
+.cornell-note .cm-scroller {
+  contain: none !important;
+}
+
+/* Strip the embed-block's own padding/margin so it collapses to zero height
+ * once the absolutely-positioned callout is taken out of flow. */
+.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="cue"]) {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  /* CM6 sets `contain: paint` on .cm-embed-block. Combined with our 0-height */
+  /* collapse, that clips the absolute callout to a 0-height paint region — */
+  /* making it invisible. Disabling containment fixes the clipping. */
+  contain: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  /* CM6 typically sets `.cm-embed-block` to `position: relative`. If that
+   * stays in effect, the absolutely-positioned cue inside resolves `left`
+   * against the embed-block's left edge (which sits at .cm-content's
+   * content edge, i.e. shifted right by --cue-column-offset) — and the
+   * cue lands in the body column, visually overlaying body text. Forcing
+   * static restores .cm-content as the cue's containing block. */
+  position: static !important;
+}
+
+.cornell-note .cm-embed-block .callout[data-callout="cue"] {
+  position: absolute;
+  left: 15px;
+  z-index: 1;
+}
+
+/* Strip the CM6 embed-block chrome around the rendered summary so it reads
+ * as plain prose, matching the shared inner-callout stripping above. */
+.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
+  padding: 0 !important;
+  margin: 0 !important;
+  contain: none !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Source-mode cue line (cursor inside, raw `> [!cue]` text visible). */
+/* The line stays in CM's flow (so height is accurate) but is visually */
+/* shifted into the cue column via negative margin. */
+.cornell-note .cm-line.cornell-cue-line {
+  margin-left: calc(15px - var(--cue-column-offset));
+  max-width: var(--cue-width);
+  font-style: italic;
+}
+
+/* Source-mode summary line (cursor inside, raw `> [!summary]` text visible).
+ * Stays in the body column, no chrome, no shift — reads as plain prose. */
+.cornell-note .cm-line.cornell-summary-line {
+  font-style: normal;
+}
