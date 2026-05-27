@@ -210,6 +210,65 @@
   z-index: 1;
 }
 
+/* Invalid (adjacent) cues — stack vertically instead of overlapping.
+ *
+ * The default layout collapses each cue's embed-block to 0 height (so the
+ * body content fills the slot) and absolutely positions the callout into
+ * the left margin. When two cues sit back-to-back with no body between them,
+ * every collapsed slot resolves to the same y-coordinate and the cues
+ * overlap. For invalid cues we take the callout out of absolute positioning
+ * and shift it into the cue column via negative margin instead, restoring
+ * the embed-block's natural height. Subsequent invalid cues then land below
+ * via normal block flow. */
+.cornell-note .cm-embed-block.cm-callout:has(
+  .callout[data-callout="cue"].cornell-invalid
+) {
+  min-height: unset !important;
+}
+
+.cornell-note .cm-embed-block .callout[data-callout="cue"].cornell-invalid {
+  position: static;
+  margin-left: calc(15px - var(--cue-column-offset));
+}
+
+/* Reading view: same fix. Each cue is wrapped in its own `<div>` child of
+ * `.markdown-preview-sizer`; with the callout absolute-positioned, those
+ * wrappers collapse to 0 height and adjacent cues end up at the same y.
+ * For invalid cues, switch to static + margin-shift so wrappers gain real
+ * height and stack.
+ *
+ * Wrapper padding gotcha: the body-divider rule above gives every wrapper
+ * containing a p/ul/ol/pre/blockquote a `padding-left: 15px`. That includes
+ * cue wrappers (the callout-content has a `<p>` inside). With absolute
+ * positioning the 15px padding was invisible because the wrapper was 0 tall.
+ * Once we restore natural height, that padding shifts the cue's margin
+ * anchor 15px right and the cue lands at the wrong x. Strip the wrapper
+ * chrome for invalid-cue wrappers so the margin-left math matches Live
+ * Preview's. */
+.cornell-note .markdown-preview-sizer
+  > div:has(.callout[data-callout="cue"].cornell-invalid) {
+  border-left: none;
+  padding-left: 0;
+}
+
+.cornell-note
+  .markdown-preview-sizer
+  .callout[data-callout="cue"].cornell-invalid {
+  position: static;
+  margin-left: calc(15px - var(--cue-column-offset));
+}
+
+/* Warning UI: red left-border on invalid cues. Works in both Reading view
+ * and Live Preview because the shared `.callout[data-callout="cue"]` rule
+ * sets `box-sizing: border-box`, so the border-left does not push the cue's
+ * outer width past --cue-width. The tooltip is set as a `title` attribute
+ * by the plugin (Live Preview RAF hook + Reading view post-processor). */
+.cornell-note .callout[data-callout="cue"].cornell-invalid {
+  border-left: 3px solid var(--text-error, #d33);
+  padding-left: 6px;
+  cursor: help;
+}
+
 /* Strip the CM6 embed-block chrome around the rendered summary so it reads
  * as plain prose, matching the shared inner-callout stripping above. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {

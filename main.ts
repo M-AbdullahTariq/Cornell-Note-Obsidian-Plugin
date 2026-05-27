@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
 import { EditorView } from "@codemirror/view";
-import { hasCornellCssClass } from "./parser";
+import { hasCornellCssClass, parseCornell } from "./parser";
 import {
   buildCornellEditorExtension,
   cornellRefreshEffect,
@@ -80,6 +80,35 @@ export default class CornellNotesPlugin extends Plugin {
         logger: this.logger,
       })
     );
+
+    this.registerMarkdownPostProcessor(async (el, ctx) => {
+      const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);
+      if (!(file instanceof TFile)) return;
+      const cache = this.app.metadataCache.getFileCache(file);
+      if (!hasCornellCssClass(cache?.frontmatter)) return;
+
+      const previewRoot = el.closest(".markdown-preview-view");
+      if (!previewRoot) return;
+
+      const source = await this.app.vault.cachedRead(file);
+      const result = parseCornell(source, cache?.frontmatter);
+      const cueEls = previewRoot.querySelectorAll<HTMLElement>(
+        '.callout[data-callout="cue"]'
+      );
+      const cueItems = result.items.filter((it) => it.type === "cue");
+      cueEls.forEach((cueEl, idx) => {
+        const invalid = cueItems[idx]?.invalid === "adjacent-cue";
+        cueEl.classList.toggle("cornell-invalid", invalid);
+        if (invalid) {
+          cueEl.setAttribute(
+            "title",
+            "Cue has no body block before the next cue. Add content below, or merge the cues."
+          );
+        } else {
+          cueEl.removeAttribute("title");
+        }
+      });
+    });
 
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => {

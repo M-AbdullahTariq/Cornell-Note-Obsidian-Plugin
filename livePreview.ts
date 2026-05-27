@@ -14,6 +14,9 @@ const CUE_LINE_CLASS = "cornell-cue-line";
 const SUMMARY_LINE_CLASS = "cornell-summary-line";
 const BODY_LINE_CLASS = "cornell-body-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
+const INVALID_CALLOUT_CLASS = "cornell-invalid";
+const INVALID_TOOLTIP =
+  "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
 export const cornellRefreshEffect = StateEffect.define<void>();
 
@@ -26,6 +29,7 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      private rebuildTimer: number | null = null;
 
       constructor(view: EditorView) {
         ctx.logger?.log("[LP] ViewPlugin constructed for view.dom:", describeElement(view.dom));
@@ -33,18 +37,44 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
       }
 
       update(update: ViewUpdate) {
-        if (update.docChanged) {
-          this.decorations = this.build(update.view, "doc-change");
-          return;
-        }
+        // Refresh effect (settings / metadata cache change): rebuild now.
+        // These are user-driven events, not keystroke-spammy.
         for (const tr of update.transactions) {
           for (const effect of tr.effects) {
             if (effect.is(cornellRefreshEffect)) {
+              this.cancelPendingRebuild();
               this.decorations = this.build(update.view, "refresh-effect");
               return;
             }
           }
         }
+        // Doc changed: debounce the rebuild so the red-border validation
+        // doesn't flicker on every keystroke while the user is mid-typing
+        // a body block between two cues. CodeMirror automatically maps
+        // existing line decorations through the changes, so what's on
+        // screen stays visually plausible during the debounce window.
+        if (update.docChanged) {
+          this.scheduleRebuild(update.view);
+        }
+      }
+
+      private scheduleRebuild(view: EditorView) {
+        this.cancelPendingRebuild();
+        this.rebuildTimer = window.setTimeout(() => {
+          this.rebuildTimer = null;
+          view.dispatch({ effects: cornellRefreshEffect.of() });
+        }, 300);
+      }
+
+      private cancelPendingRebuild() {
+        if (this.rebuildTimer !== null) {
+          window.clearTimeout(this.rebuildTimer);
+          this.rebuildTimer = null;
+        }
+      }
+
+      destroy() {
+        this.cancelPendingRebuild();
       }
 
       build(view: EditorView, reason: string): DecorationSet {
@@ -167,6 +197,17 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         ranges.sort((a, b) => a.from - b.from);
 
         log?.log(`  → applying ${ranges.length} line decorations`);
+
+        // Apply `.cornell-invalid` to rendered cue callouts whose parser item
+        // is flagged. Done on the next animation frame because the embed-block
+        // DOM is populated asynchronously by Obsidian's callout renderer.
+        const invalidFlags = result.items
+          .filter((it) => it.type === "cue")
+          .map((it) => it.invalid === "adjacent-cue");
+        window.requestAnimationFrame(() => {
+          markInvalidCueCallouts(view, invalidFlags);
+        });
+
         return Decoration.set(ranges, true);
       }
     },
@@ -174,6 +215,21 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
       decorations: (v) => v.decorations,
     }
   );
+}
+
+function markInvalidCueCallouts(view: EditorView, flags: boolean[]): void {
+  const cueEls = view.dom.querySelectorAll<HTMLElement>(
+    '.callout[data-callout="cue"]'
+  );
+  cueEls.forEach((el, idx) => {
+    const invalid = !!flags[idx];
+    el.classList.toggle(INVALID_CALLOUT_CLASS, invalid);
+    if (invalid) {
+      el.setAttribute("title", INVALID_TOOLTIP);
+    } else {
+      el.removeAttribute("title");
+    }
+  });
 }
 
 function findFileForEditor(view: EditorView, app: App): TFile | null {

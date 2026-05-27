@@ -17,6 +17,10 @@ export interface CornellItem {
   sourceRange: Range;
   content: string;
   anchorBlockRange: Range | null;
+  /** Set when this cue is invalid because the previous or next cue sits
+   *  directly above/below it with only blank lines between (no body block).
+   *  Both cues in an adjacent pair receive the flag. */
+  invalid?: "adjacent-cue";
 }
 
 export interface CornellParseResult {
@@ -73,6 +77,8 @@ export function parseCornell(
   let firstHorizontalRuleIndex = -1;
 
   let i = 0;
+  let lastCueItemIdx = -1;
+  let lastCueEndLineIdx = -1;
   while (i < lns.length) {
     const kind = kinds[i];
     if (
@@ -90,7 +96,22 @@ export function parseCornell(
           ? findAnchorBlock(lns, kinds, j) ?? sourceRange
           : sourceRange;
 
+      const item: CornellItem = {
+        type: kind.calloutType,
+        sourceRange,
+        content,
+        anchorBlockRange,
+      };
+
       if (kind.calloutType === "cue") {
+        if (
+          lastCueItemIdx >= 0 &&
+          allBlankBetween(kinds, lastCueEndLineIdx + 1, i)
+        ) {
+          item.invalid = "adjacent-cue";
+          items[lastCueItemIdx].invalid = "adjacent-cue";
+        }
+
         // Collect blank lines immediately after the cue, up to the first
         // non-blank source line. Live Preview collapses these so the cue
         // visually lands on the same row as its anchor body block.
@@ -99,12 +120,12 @@ export function parseCornell(
         }
       }
 
-      items.push({
-        type: kind.calloutType,
-        sourceRange,
-        content,
-        anchorBlockRange,
-      });
+      items.push(item);
+
+      if (kind.calloutType === "cue") {
+        lastCueItemIdx = items.length - 1;
+        lastCueEndLineIdx = j - 1;
+      }
 
       i = j;
     } else {
@@ -275,6 +296,17 @@ function classifyLines(lns: Line[]): LineKind[] {
   }
 
   return out;
+}
+
+function allBlankBetween(
+  kinds: LineKind[],
+  from: number,
+  toExclusive: number
+): boolean {
+  for (let k = from; k < toExclusive; k++) {
+    if (kinds[k].kind !== "blank") return false;
+  }
+  return true;
 }
 
 function extractContent(kinds: LineKind[], i: number, j: number): string {
