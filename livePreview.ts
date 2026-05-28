@@ -8,6 +8,7 @@ import {
 import { Range, StateEffect } from "@codemirror/state";
 import { App, MarkdownView, TFile } from "obsidian";
 import { hasCornellCssClass, parseCornell } from "./parser";
+import { buildCueLayout, invalidFlagsFromLayout } from "./cueLayout";
 import { ancestorChain, describeElement, Logger } from "./logger";
 
 const CUE_LINE_CLASS = "cornell-cue-line";
@@ -201,9 +202,7 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         // Apply `.cornell-invalid` to rendered cue callouts whose parser item
         // is flagged. Done on the next animation frame because the embed-block
         // DOM is populated asynchronously by Obsidian's callout renderer.
-        const invalidFlags = result.items
-          .filter((it) => it.type === "cue")
-          .map((it) => it.invalid === "adjacent-cue");
+        const invalidFlags = invalidFlagsFromLayout(buildCueLayout(result));
         window.requestAnimationFrame(() => {
           markInvalidCueCallouts(view, invalidFlags);
         });

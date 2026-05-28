@@ -1,6 +1,7 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import { hasCornellCssClass, parseCornell } from "./parser";
+import { buildCueLayout, invalidFlagsFromLayout } from "./cueLayout";
 import {
   buildCornellEditorExtension,
   cornellRefreshEffect,
@@ -91,13 +92,14 @@ export default class CornellNotesPlugin extends Plugin {
       if (!previewRoot) return;
 
       const source = await this.app.vault.cachedRead(file);
-      const result = parseCornell(source, cache?.frontmatter);
+      const flags = invalidFlagsFromLayout(
+        buildCueLayout(parseCornell(source, cache?.frontmatter))
+      );
       const cueEls = previewRoot.querySelectorAll<HTMLElement>(
         '.callout[data-callout="cue"]'
       );
-      const cueItems = result.items.filter((it) => it.type === "cue");
       cueEls.forEach((cueEl, idx) => {
-        const invalid = cueItems[idx]?.invalid === "adjacent-cue";
+        const invalid = !!flags[idx];
         cueEl.classList.toggle("cornell-invalid", invalid);
         if (invalid) {
           cueEl.setAttribute(

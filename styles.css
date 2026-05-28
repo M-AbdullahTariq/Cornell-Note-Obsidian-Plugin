@@ -17,6 +17,10 @@
 
 /* =====================================================================
  * Shared cue / summary callout styling (Reading view + Live Preview)
+ *
+ * Cue text auto-wraps to as many lines as needed. The cue grows taller
+ * naturally — no horizontal or vertical clipping. Long single tokens
+ * (URLs, hyphenated terms) break at the column edge via overflow-wrap.
  * ===================================================================== */
 
 .cornell-note .callout[data-callout="cue"] {
@@ -27,13 +31,14 @@
   margin: 0;
   box-shadow: none;
   mix-blend-mode: normal;
-  /* Hard-clamp the cue to the cue column. Without box-sizing: border-box
-   * the cue could exceed --cue-width due to inherited padding/border, and
-   * its text could then visually overlap body content in Live Preview. */
+  /* The width clamp keeps the cue inside its column. box-sizing prevents
+   * inherited padding/border from pushing it past --cue-width. */
   box-sizing: border-box;
   max-width: var(--cue-width);
   width: var(--cue-width);
-  overflow: hidden;
+  /* No overflow clip — vertical growth is the whole point of the column. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cornell-note .callout[data-callout="cue"] .callout-icon {
@@ -41,8 +46,7 @@
 }
 
 /* Obsidian's default `.callout-title` is `display: flex` — that keeps the
- * title-inner from wrapping and causes long cues to overflow past --cue-width.
- * Reset to block so text wraps inside the column. */
+ * title-inner from wrapping. Reset to block so text wraps inside the column. */
 .cornell-note .callout[data-callout="cue"] .callout-title {
   display: block;
   padding: 0;
@@ -59,6 +63,7 @@
   line-height: var(--line-height);
   padding: 0 8px 0 0;
   color: var(--text-normal);
+  white-space: normal;
 }
 
 .cornell-note .callout[data-callout="cue"] .callout-content,
@@ -71,6 +76,7 @@
   padding: 0 8px 0 0;
   margin: 0;
   color: var(--text-normal);
+  white-space: normal;
 }
 
 /* Summary callout: strip all chrome so it renders as plain body text. */
@@ -96,65 +102,107 @@
 }
 
 /* =====================================================================
- * Reading view layout
+ * Reading view layout — CSS Grid
+ *
+ * Each top-level block in `.markdown-preview-sizer` lives in its own
+ * wrapper `<div>`. We classify wrappers by their content via `:has()` and
+ * place them into one of three grid tracks:
+ *
+ *   col 1: cue column
+ *   col 2: gap
+ *   col 3: body column
+ *
+ * Grid auto-placement (row-major) pairs a cue at col 1 with the next body
+ * at col 3 in the same row. The grid row height is the taller of (cue,
+ * body), so a multi-line cue makes its row taller and pushes the next
+ * row down — no more clipping or overlap.
+ *
+ * Headings, the `---` rule, and the summary block span all three columns
+ * (no cue-column reservation below the rule).
  * ===================================================================== */
 
 .cornell-note .markdown-preview-sizer {
-  position: relative;
-  padding-left: var(--cue-column-offset);
+  display: grid;
+  grid-template-columns: var(--cue-width) var(--cue-gap) 1fr;
+  align-items: start;
+  /* Default block flow gives wrappers some vertical margin; preserve that
+   * by letting row-gap stay 0 and relying on the wrappers' own margins. */
+  row-gap: 0;
+  column-gap: 0;
 }
 
-/* Vertical divider line + small left padding on body blocks. The summary
- * section is excluded so the divider visually stops above the horizontal
- * rule that separates the body from the summary. */
-.cornell-note .markdown-preview-sizer > div:has(p, ul, ol, pre, blockquote):not(:has(.callout[data-callout="summary"])) {
+/* Cue wrapper → cue column. The callout inside renders in flow at the
+ * column edge (no absolute positioning needed). */
+.cornell-note .markdown-preview-sizer
+  > div:has(.callout[data-callout="cue"]) {
+  grid-column: 1;
+}
+
+/* Body wrapper → body column, with the per-block divider line. We exclude
+ * wrappers that contain any callout (cue OR summary) so the cue wrapper
+ * doesn't also get the body divider, and the summary doesn't either. */
+.cornell-note .markdown-preview-sizer
+  > div:has(p, ul, ol, pre, blockquote):not(:has(.callout)) {
+  grid-column: 3;
   border-left: var(--cue-line);
   padding-left: 15px;
 }
 
-/* Position cue callouts in the left margin (reserved by sizer padding). */
-.cornell-note .markdown-preview-sizer .callout[data-callout="cue"] {
-  position: absolute;
-  left: 15px;
+/* Headings + horizontal rule span the full width. */
+.cornell-note .markdown-preview-sizer
+  > div:has(h1, h2, h3, h4, h5, h6, hr) {
+  grid-column: 1 / -1;
+}
+
+/* Summary section spans the full width — plain prose below the `---`. */
+.cornell-note .markdown-preview-sizer
+  > div:has(.callout[data-callout="summary"]) {
+  grid-column: 1 / -1;
 }
 
 /* =====================================================================
  * Live Preview (CodeMirror 6) layout
  *
- * In modern CM6, rendered callouts live in `.cm-embed-block.cm-callout` as a
- * direct child of `.cm-content` — they are NOT inside `.cm-line`. Selectors
- * here target that structure.
+ * CM6 manages `.cm-content`'s layout for cursor positioning; turning it
+ * into a grid would break click → position mapping. So Live Preview keeps
+ * the established mechanism:
+ *
+ *   - `.cm-content` reserves `--cue-column-offset` on its left padding.
+ *   - The rendered cue callout is `position: absolute` inside its
+ *     embed-block (which collapses to 0 height) so the body source line
+ *     visually sits on the same row.
+ *   - Blank source lines between cue and body collapse via the
+ *     `cornell-collapsed-gap` decoration.
+ *
+ * The cut-off bug is fixed entirely via the shared cue rules above
+ * (no `overflow: hidden`, `overflow-wrap: anywhere`). Wrapping cues grow
+ * taller; since the cue is absolute-positioned, very tall cues can still
+ * extend past the next row's natural height — that follow-up is tracked
+ * separately from this PRD.
  * ===================================================================== */
 
 .cornell-note .cm-editor {
   position: relative;
 }
 
-/* Push body content right so the cue column has reserved space. CM6 defaults
- * set padding on .cm-content, so we need !important to win the cascade.
- * Also make .cm-content the positioning context for absolute cue callouts. */
 .cornell-note .cm-content {
   padding-left: var(--cue-column-offset) !important;
   position: relative;
-  /* Defensive: prevent any inherited overflow/clip from hiding cues that */
-  /* land in the padding area on the left. */
   overflow: visible !important;
 }
 
-/* Per-line divider — matches Reading view's per-wrapper `border-left`.
- * Only body-content lines (paragraphs, lists, code, blockquotes) get the
- * decoration class, so the divider breaks at blank lines, headings, the
- * horizontal rule, and the summary section — same boundaries Reading view
- * breaks at. */
+/* Per-line divider on body-content lines. Matches Reading view's
+ * per-wrapper border-left. Stops at the first horizontal rule so the
+ * summary region has no divider. */
 .cornell-note .cm-line.cornell-body-line {
   border-left: var(--cue-line);
   padding-left: 15px;
 }
 
 /* Blank source lines between a cue and its anchor body block: collapse
- * them so the cue's embed-block (which sits at min-height: 0 below) lands
- * on the same row as the anchor. The active-line override restores full
- * height so the user can still place the cursor and edit. */
+ * them so the cue's embed-block (at min-height: 0 below) lands on the
+ * same row as the anchor. The active-line override restores full height
+ * so the user can still place the cursor and edit. */
 .cornell-note .cm-line.cornell-collapsed-gap {
   height: 0;
   min-height: 0;
@@ -181,26 +229,17 @@
   contain: none !important;
 }
 
-/* Strip the embed-block's own padding/margin so it collapses to zero height
- * once the absolutely-positioned callout is taken out of flow. */
+/* Strip the embed-block's own padding/margin so it collapses to zero
+ * height once the absolutely-positioned callout is taken out of flow. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="cue"]) {
   padding: 0 !important;
   margin: 0 !important;
   min-height: 0 !important;
   overflow: visible !important;
-  /* CM6 sets `contain: paint` on .cm-embed-block. Combined with our 0-height */
-  /* collapse, that clips the absolute callout to a 0-height paint region — */
-  /* making it invisible. Disabling containment fixes the clipping. */
   contain: none !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  /* CM6 typically sets `.cm-embed-block` to `position: relative`. If that
-   * stays in effect, the absolutely-positioned cue inside resolves `left`
-   * against the embed-block's left edge (which sits at .cm-content's
-   * content edge, i.e. shifted right by --cue-column-offset) — and the
-   * cue lands in the body column, visually overlaying body text. Forcing
-   * static restores .cm-content as the cue's containing block. */
   position: static !important;
 }
 
@@ -212,14 +251,14 @@
 
 /* Invalid (adjacent) cues — stack vertically instead of overlapping.
  *
- * The default layout collapses each cue's embed-block to 0 height (so the
- * body content fills the slot) and absolutely positions the callout into
- * the left margin. When two cues sit back-to-back with no body between them,
- * every collapsed slot resolves to the same y-coordinate and the cues
- * overlap. For invalid cues we take the callout out of absolute positioning
- * and shift it into the cue column via negative margin instead, restoring
- * the embed-block's natural height. Subsequent invalid cues then land below
- * via normal block flow. */
+ * In Live Preview, the default layout collapses each cue's embed-block
+ * to 0 height (so the body content fills the slot) and absolutely
+ * positions the callout. When two cues sit back-to-back with no body
+ * between them, every collapsed slot resolves to the same y-coordinate
+ * and the cues overlap. For invalid cues we take the callout out of
+ * absolute positioning and shift it into the cue column via negative
+ * margin instead, restoring natural height. Subsequent invalid cues
+ * land below via normal flow. */
 .cornell-note .cm-embed-block.cm-callout:has(
   .callout[data-callout="cue"].cornell-invalid
 ) {
@@ -231,46 +270,24 @@
   margin-left: calc(15px - var(--cue-column-offset));
 }
 
-/* Reading view: same fix. Each cue is wrapped in its own `<div>` child of
- * `.markdown-preview-sizer`; with the callout absolute-positioned, those
- * wrappers collapse to 0 height and adjacent cues end up at the same y.
- * For invalid cues, switch to static + margin-shift so wrappers gain real
- * height and stack.
- *
- * Wrapper padding gotcha: the body-divider rule above gives every wrapper
- * containing a p/ul/ol/pre/blockquote a `padding-left: 15px`. That includes
- * cue wrappers (the callout-content has a `<p>` inside). With absolute
- * positioning the 15px padding was invisible because the wrapper was 0 tall.
- * Once we restore natural height, that padding shifts the cue's margin
- * anchor 15px right and the cue lands at the wrong x. Strip the wrapper
- * chrome for invalid-cue wrappers so the margin-left math matches Live
- * Preview's. */
-.cornell-note .markdown-preview-sizer
-  > div:has(.callout[data-callout="cue"].cornell-invalid) {
-  border-left: none;
-  padding-left: 0;
-}
+/* Reading view: invalid cues in the grid layout are already in column 1
+ * by default (each in its own row). No special positioning is needed — the
+ * red-border warning is enough. The previous "wrapper padding gotcha" no
+ * longer applies because the cue wrapper isn't matched by the body-divider
+ * selector (which now excludes any wrapper containing a callout). */
 
-.cornell-note
-  .markdown-preview-sizer
-  .callout[data-callout="cue"].cornell-invalid {
-  position: static;
-  margin-left: calc(15px - var(--cue-column-offset));
-}
-
-/* Warning UI: red left-border on invalid cues. Works in both Reading view
- * and Live Preview because the shared `.callout[data-callout="cue"]` rule
- * sets `box-sizing: border-box`, so the border-left does not push the cue's
- * outer width past --cue-width. The tooltip is set as a `title` attribute
- * by the plugin (Live Preview RAF hook + Reading view post-processor). */
+/* Warning UI: red left-border on invalid cues. Works in both views because
+ * `box-sizing: border-box` keeps the border inside --cue-width. The tooltip
+ * is set as a `title` attribute by the plugin (Live Preview RAF hook +
+ * Reading view post-processor). */
 .cornell-note .callout[data-callout="cue"].cornell-invalid {
   border-left: 3px solid var(--text-error, #d33);
   padding-left: 6px;
   cursor: help;
 }
 
-/* Strip the CM6 embed-block chrome around the rendered summary so it reads
- * as plain prose, matching the shared inner-callout stripping above. */
+/* Strip the CM6 embed-block chrome around the rendered summary so it
+ * reads as plain prose, matching the shared inner-callout stripping. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
   padding: 0 !important;
   margin: 0 !important;
@@ -280,17 +297,17 @@
   box-shadow: none !important;
 }
 
-/* Source-mode cue line (cursor inside, raw `> [!cue]` text visible). */
-/* The line stays in CM's flow (so height is accurate) but is visually */
-/* shifted into the cue column via negative margin. */
+/* Source-mode cue line (cursor inside, raw `> [!cue]` text visible).
+ * Shifted into the cue column via negative margin so editing happens
+ * visually where the rendered cue lives. */
 .cornell-note .cm-line.cornell-cue-line {
   margin-left: calc(15px - var(--cue-column-offset));
   max-width: var(--cue-width);
   font-style: italic;
 }
 
-/* Source-mode summary line (cursor inside, raw `> [!summary]` text visible).
- * Stays in the body column, no chrome, no shift — reads as plain prose. */
+/* Source-mode summary line (cursor inside, raw `> [!summary]` text
+ * visible). Stays in the body column as plain prose. */
 .cornell-note .cm-line.cornell-summary-line {
   font-style: normal;
 }
