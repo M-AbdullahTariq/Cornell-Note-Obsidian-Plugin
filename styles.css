@@ -140,9 +140,11 @@
 
 /* Body wrapper → body column, with the per-block divider line. We exclude
  * wrappers that contain any callout (cue OR summary) so the cue wrapper
- * doesn't also get the body divider, and the summary doesn't either. */
+ * doesn't also get the body divider, and the summary doesn't either.
+ * `table` is in the allowlist so a markdown table after a cue pairs with
+ * it on the same grid row, matching paragraph/list behaviour. */
 .cornell-note .markdown-preview-sizer
-  > div:has(p, ul, ol, pre, blockquote):not(:has(.callout)) {
+  > div:has(p, ul, ol, pre, blockquote, table):not(:has(.callout)) {
   grid-column: 3;
   border-left: var(--cue-line);
   padding-left: 15px;
@@ -195,6 +197,19 @@
  * per-wrapper border-left. Stops at the first horizontal rule so the
  * summary region has no divider. */
 .cornell-note .cm-line.cornell-body-line {
+  border-left: var(--cue-line);
+  padding-left: 15px;
+}
+
+/* Rendered table widget (cursor outside the table) sits in its own
+ * `.cm-embed-block`, which is not a `.cm-line` and therefore misses the
+ * line-decoration above. Give it the same border-left + padding so the
+ * embed widget matches Reading view and source-mode editing.
+ *
+ * The `> table` direct-child clause keeps this from hitting cue or
+ * summary embed-blocks (those have `.callout` as their direct child,
+ * not `<table>`). */
+.cornell-note .cm-embed-block:has(> table) {
   border-left: var(--cue-line);
   padding-left: 15px;
 }
