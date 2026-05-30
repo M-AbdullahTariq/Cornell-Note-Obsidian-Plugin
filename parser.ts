@@ -30,9 +30,10 @@ export interface CornellParseResult {
    *  and code fences. Null when the file has no such rule. */
   firstHorizontalRule: Range | null;
   /** Per-line source ranges for lines classified as body content
-   *  (paragraphs, list items, code-block content, plain-blockquote lines).
-   *  Lines at or after `firstHorizontalRule` are excluded, matching Reading
-   *  view's per-wrapper `border-left` rule which stops above the rule. */
+   *  (paragraphs, list items, code-block content, plain-blockquote lines)
+   *  anywhere in the file. Matches Reading view's per-wrapper `border-left`
+   *  rule, which borders every body wrapper regardless of position — so
+   *  Cornell sections after the summary's `---` keep their divider too. */
   bodyLineRanges: Range[];
   /** Per-line source ranges for blank lines that sit immediately between a
    *  cue's last source line and its anchor body block's first source line.
@@ -74,7 +75,6 @@ export function parseCornell(
   const items: CornellItem[] = [];
   const cueGapRanges: Range[] = [];
   let firstHorizontalRule: Range | null = null;
-  let firstHorizontalRuleIndex = -1;
 
   let i = 0;
   let lastCueItemIdx = -1;
@@ -131,7 +131,6 @@ export function parseCornell(
     } else {
       if (firstHorizontalRule === null && kind.kind === "horizontal-rule") {
         firstHorizontalRule = { from: lns[i].start, to: lns[i].end };
-        firstHorizontalRuleIndex = i;
       }
       i++;
     }
@@ -141,13 +140,14 @@ export function parseCornell(
   // Preview. Mirrors Reading view's `:has(p, ul, ol, pre, blockquote)`
   // wrapper match — i.e. paragraphs, list items, code-fence content, and
   // plain `> ` blockquotes (which fall through to `body` kind here because
-  // they have no callout-start ancestor). Stops at the first horizontal
-  // rule so the summary region below it has no divider, matching Reading
-  // view's `:not(:has(.callout[data-callout="summary"]))` exclusion.
+  // they have no callout-start ancestor). Runs over the WHOLE file so that
+  // Cornell sections appearing after the summary's `---` (multiple sections
+  // per file, as the README documents) keep their divider — matching Reading
+  // view, whose `:not(:has(.callout))` rule borders every body wrapper
+  // regardless of position. Summary callout lines, headings, and horizontal
+  // rules are their own line kinds, so they are naturally excluded here.
   const bodyLineRanges: Range[] = [];
-  const bodyEnd =
-    firstHorizontalRuleIndex >= 0 ? firstHorizontalRuleIndex : lns.length;
-  for (let k = 0; k < bodyEnd; k++) {
+  for (let k = 0; k < lns.length; k++) {
     const kk = kinds[k];
     if (
       kk.kind === "body" ||
