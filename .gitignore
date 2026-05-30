@@ -4,6 +4,7 @@ main.js
 .DS_Store
 data.json
 cornell-debug.log
+tests/dist/
 
 # AI / planning artifacts — never push to remote.
 PRD*.md
