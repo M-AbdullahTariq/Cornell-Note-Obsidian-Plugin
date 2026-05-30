@@ -1,6 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
 import { EditorView } from "@codemirror/view";
-import { hasCornellCssClass, slotForLineRange } from "./classifier";
+import { classifySection, hasCornellCssClass } from "./classifier";
 import {
   buildCornellEditorExtension,
   cornellRefreshEffect,
@@ -96,18 +96,30 @@ export default class CornellNotesPlugin extends Plugin {
       if (!info) return;
 
       const source = await this.app.vault.cachedRead(file);
-      const slot = slotForLineRange(
+      const resolved = classifySection(
         source,
         cache?.frontmatter,
         info.lineStart,
         info.lineEnd
       );
-      if (!slot) return;
+      if (!resolved) return;
+      const { slot, notesEnd } = resolved;
 
       // Stamp the slot role on the grid-item wrapper (the preview-sizer's
       // direct child) so the stylesheet can place it without `:has()` guesswork.
       const wrapper = sizerChild(el) ?? el;
       wrapper.setAttribute("data-cornell-slot", slot.role);
+
+      // Break the divider line before the next cue, but only on the section
+      // that holds the region's last source line. A body slot can render as
+      // several sections (e.g. a table and the paragraph right below it); the
+      // interior ones must stay connected, so classifySection decides per
+      // section, not per slot. Toggle so re-renders don't leave a stale flag.
+      if (notesEnd) {
+        wrapper.setAttribute("data-cornell-notes-end", "");
+      } else {
+        wrapper.removeAttribute("data-cornell-notes-end");
+      }
 
       // Mark this section's cue invalid (adjacent-cue) directly — no whole-
       // preview index matching.

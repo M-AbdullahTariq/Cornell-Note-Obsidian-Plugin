@@ -154,11 +154,30 @@
   grid-column: 1;
 }
 
-/* Body → body column, with the per-block divider line. */
+/* Body → body column, with the divider line. `align-self: stretch` makes each
+ * body wrapper fill its full grid-row height (overriding the grid's
+ * `align-items: start`), so the border-left covers the whole row — including
+ * the empty space beside a taller cue. With `row-gap: 0` and no inter-block
+ * margin, consecutive body blocks in the same cue's notes region butt together
+ * into ONE continuous divider line (paragraph → table → list, all connected).
+ * Without stretch the border only spanned each block's own height, leaving the
+ * gappy, fragmented line from the bug report. */
 .cornell-note .markdown-preview-sizer > [data-cornell-slot="body"] {
   grid-column: 3;
+  align-self: stretch;
   border-left: var(--cue-line);
   padding-left: 15px;
+  margin: 0;
+}
+
+/* The last body block of a cue's notes region breaks the line before the next
+ * cue: a bottom margin drops the border short of the row edge, so the divider
+ * stops here and resumes at the next cue's first body. The classifier flags
+ * this block (Slot.notesEnd); interior blocks are unmarked and stay connected. */
+.cornell-note
+  .markdown-preview-sizer
+  > [data-cornell-slot="body"][data-cornell-notes-end] {
+  margin-bottom: var(--cue-gap);
 }
 
 /* `summary` and `full` slots span the full width via the default `> *` rule

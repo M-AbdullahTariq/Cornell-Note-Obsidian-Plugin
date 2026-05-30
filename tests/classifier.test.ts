@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyBlocks, type Slot } from "../classifier";
+import { classifyBlocks, classifySection, type Slot } from "../classifier";
 
 // The Classifier is the single source of truth for block placement. These
 // tests assert its observable output — the ordered sequence of slot roles and
@@ -162,6 +162,83 @@ test("a table after a cue is a body slot", () => {
 | 1 | 2 |
 `;
   assert.ok(bodyCovers(md, "TABLE_HEAD"));
+});
+
+// Regression for the divider-continuity bug (wrong.jpg): within one cue's
+// notes region the divider must be unbroken, breaking only before the next
+// cue. The classifier marks the LAST body block of each region with notesEnd;
+// interior body blocks (paragraph → table → paragraph) must NOT be marked, so
+// Reading view keeps their divider segments connected.
+test("only the last body block of a cue region is flagged notesEnd", () => {
+  const md = `> [!cue] crazy how this works?
+
+PARA_ONE
+
+| AWD | AD |
+| --- | --- |
+| 1 | 2 |
+
+PARA_TWO
+
+> [!cue] next cue
+
+LAST_REGION
+`;
+  const slots = classifyBlocks(md, FM);
+  const bodies = slots.filter((s) => s.role === "body");
+  // three blocks in region one (paragraph, table, paragraph) + one in region two
+  assert.equal(bodies.length, 4);
+  const flagOf = (marker: string) =>
+    bodies.find(
+      (b) =>
+        md.indexOf(marker) >= b.sourceRange.from &&
+        md.indexOf(marker) < b.sourceRange.to
+    )?.notesEnd ?? false;
+  assert.equal(flagOf("PARA_ONE"), false); // interior — divider continues
+  assert.equal(flagOf("AWD"), false); // interior table — divider continues
+  assert.equal(flagOf("PARA_TWO"), true); // last of region one — break here
+  assert.equal(flagOf("LAST_REGION"), true); // last block overall — break
+});
+
+// Regression for the real-note bug: a table immediately followed by a one-line
+// paragraph (no blank between) is ONE body slot but renders as TWO sections in
+// Obsidian. Only the trailing-paragraph section (the slot's last line) may
+// break the divider; the table section must stay connected.
+test("a notesEnd body slot breaks the divider only on its last line", () => {
+  // 0-based lines: 0 cue, 1 blank, 2 table, 3 table, 4 table, 5 "Ad",
+  //                6 blank, 7 cue, 8 blank, 9 body
+  const md = `>[!cue] one
+
+| Awd | Ad |
+| --- | --- |
+| Awdawd | Awd |
+Ad
+
+>[!cue] two
+
+next region
+`;
+  // The table+"Ad" body slot spans lines 2..5 and is notesEnd.
+  const tableSlot = classifyBlocks(md, FM).find(
+    (s) => s.role === "body" && md.slice(s.sourceRange.from, s.sourceRange.to).includes("Awd")
+  );
+  assert.ok(tableSlot?.notesEnd, "table+Ad slot should be notesEnd");
+
+  // The table section (lines 2..4) is interior → must NOT break.
+  assert.equal(classifySection(md, FM, 2, 4)?.notesEnd, false);
+  // The trailing "Ad" section (line 5) is the region tail → breaks.
+  assert.equal(classifySection(md, FM, 5, 5)?.notesEnd, true);
+  // The whole slot rendered as one section (lines 2..5) also breaks (at bottom).
+  assert.equal(classifySection(md, FM, 2, 5)?.notesEnd, true);
+});
+
+test("classifySection reports the slot role and never breaks on a cue", () => {
+  const md = `>[!cue] a
+
+body
+`;
+  assert.equal(classifySection(md, FM, 0, 0)?.slot.role, "cue");
+  assert.equal(classifySection(md, FM, 0, 0)?.notesEnd, false);
 });
 
 test("a cue with a body block is not flagged invalid", () => {

@@ -32,6 +32,11 @@ export interface Slot {
    *  sits directly above/below with only blank lines between — no body block).
    *  Both cues in the pair receive the flag. */
   invalid?: "adjacent-cue";
+  /** Body only: true when this body block is the last in its cue's notes
+   *  region (the next block is a cue / heading / rule / summary, or there is
+   *  none). Reading view uses it to break the continuous divider line before
+   *  the next cue — within a region the line spans every block unbroken. */
+  notesEnd?: boolean;
   /** `full` only: true when the block is a horizontal rule `---`. */
   isHorizontalRule?: boolean;
 }
@@ -205,6 +210,16 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
     i = m;
   }
 
+  // A body block ends its cue's notes region when the next block isn't another
+  // body (a cue, heading, rule, or summary follows — or it's the last block).
+  // Reading view breaks the divider line there; consecutive body blocks within
+  // the same region stay connected for one continuous line.
+  for (let s = 0; s < slots.length; s++) {
+    if (slots[s].role !== "body") continue;
+    const next = slots[s + 1];
+    if (!next || next.role !== "body") slots[s].notesEnd = true;
+  }
+
   return slots;
 }
 
@@ -242,6 +257,41 @@ export function slotForLineRange(
     if (sStart <= lineEnd && sEnd >= lineStart) return slot;
   }
   return null;
+}
+
+/** Per-rendered-section result for the Reading-view post-processor: the slot
+ *  the section belongs to, plus whether THIS section is the tail of a cue's
+ *  notes region (so it — and only it — should break the divider line).
+ *
+ *  Obsidian can split one body slot into several rendered sections: a table and
+ *  the paragraph immediately below it (no blank line between) are one body slot
+ *  but two DOM sections. The `notesEnd` flag lives on the slot, so naively
+ *  stamping every section of a notesEnd slot would break the divider at the
+ *  table too. We instead break only on the section that contains the slot's
+ *  final source line; interior sections stay connected. */
+export function classifySection(
+  markdown: string,
+  frontmatter: unknown,
+  lineStart: number,
+  lineEnd: number
+): { slot: Slot; notesEnd: boolean } | null {
+  const slot = slotForLineRange(markdown, frontmatter, lineStart, lineEnd);
+  if (!slot) return null;
+  let notesEnd = false;
+  if (slot.role === "body" && slot.notesEnd) {
+    notesEnd = lineEnd >= lineIndexOf(markdown, slot.sourceRange.to - 1);
+  }
+  return { slot, notesEnd };
+}
+
+/** 0-based line index of a character offset (counts newlines before it). */
+function lineIndexOf(markdown: string, offset: number): number {
+  let line = 0;
+  const end = Math.min(offset, markdown.length);
+  for (let i = 0; i < end; i++) {
+    if (markdown[i] === "\n") line++;
+  }
+  return line;
 }
 
 // ----- internals -----
