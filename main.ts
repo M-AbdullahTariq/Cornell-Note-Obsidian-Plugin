@@ -10,14 +10,12 @@ import {
   CornellSettingsTab,
   DEFAULT_SETTINGS,
 } from "./settings";
-import { ancestorChain, describeElement, Logger } from "./logger";
 
 const _sig = "VGhpcyBJcyBCZWFzdEh1bnRlcnMgQ29kZQ==";
 
 const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
-const LOG_PATH = "cornell-debug.log";
 const INVALID_TOOLTIP =
   "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
@@ -61,18 +59,10 @@ function sizerChild(el: HTMLElement): HTMLElement | null {
 
 export default class CornellNotesPlugin extends Plugin {
   settings: CornellSettings = { ...DEFAULT_SETTINGS };
-  logger!: Logger;
 
   async onload() {
-    this.logger = new Logger(this.app, LOG_PATH);
-    this.logger.log("=== onload ===");
-
     await this.loadSettings();
-    this.logger.log("settings:", this.settings);
-
     this.applyCssVariables();
-    this.logger.log("CSS variables applied to documentElement");
-
     this.addSettingTab(new CornellSettingsTab(this.app, this));
 
     this.addCommand({
@@ -88,10 +78,7 @@ export default class CornellNotesPlugin extends Plugin {
     );
 
     this.registerEditorExtension(
-      buildCornellEditorExtension({
-        app: this.app,
-        logger: this.logger,
-      })
+      buildCornellEditorExtension({ app: this.app })
     );
 
     this.registerMarkdownPostProcessor(async (el, ctx) => {
@@ -141,71 +128,13 @@ export default class CornellNotesPlugin extends Plugin {
     });
 
     this.registerEvent(
-      this.app.workspace.on("file-open", (file) => {
-        if (!file) {
-          this.logger.log("file-open: <null>");
-          return;
-        }
-        const cache = this.app.metadataCache.getFileCache(file);
-        this.logger.log("file-open:", file.path);
-        this.logger.log("  frontmatter:", cache?.frontmatter ?? "<none>");
-        this.logger.log(
-          "  hasCornellCssClass:",
-          hasCornellCssClass(cache?.frontmatter)
-        );
-      })
-    );
-
-    this.registerEvent(
-      this.app.workspace.on("active-leaf-change", (leaf) => {
-        if (!leaf) return;
-        const view = leaf.view as MarkdownView;
-        if (!view || view.getViewType() !== "markdown") return;
-
-        this.logger.log("active-leaf-change");
-        this.logger.log(
-          "  containerEl ancestor chain:",
-          ancestorChain(view.containerEl, 12)
-        );
-
-        const sourceView = view.containerEl.querySelector(
-          ".markdown-source-view"
-        );
-        const previewView = view.containerEl.querySelector(
-          ".markdown-preview-view"
-        );
-        this.logger.log(
-          "  source-view:",
-          describeElement(sourceView)
-        );
-        this.logger.log(
-          "  preview-view:",
-          describeElement(previewView)
-        );
-
-        const cornellEl = view.containerEl.querySelector(".cornell-note");
-        this.logger.log(
-          "  first descendant with .cornell-note:",
-          describeElement(cornellEl)
-        );
-        const cornellAnc = view.containerEl.closest(".cornell-note");
-        this.logger.log(
-          "  closest ancestor with .cornell-note (from containerEl):",
-          describeElement(cornellAnc)
-        );
-      })
-    );
-
-    this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        this.logger.log("metadataCache changed:", file.path);
         this.refreshForFile(file);
       })
     );
   }
 
   onunload() {
-    this.logger?.log("=== onunload ===");
     const r = document.documentElement;
     r.style.removeProperty(CSS_VAR_CUE_WIDTH);
     r.style.removeProperty(CSS_VAR_LINE_COLOR);
@@ -259,9 +188,7 @@ export default class CornellNotesPlugin extends Plugin {
     try {
       const file = await this.app.vault.create(path, CORNELL_TEMPLATE);
       await this.app.workspace.getLeaf(false).openFile(file);
-      this.logger?.log("created Cornell note:", file.path);
     } catch (e) {
-      this.logger?.log("create Cornell note failed:", String(e));
       new Notice(`Could not create Cornell note: ${String(e)}`);
     }
   }
