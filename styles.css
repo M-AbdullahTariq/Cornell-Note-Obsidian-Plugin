@@ -131,6 +131,18 @@
   column-gap: 0;
 }
 
+/* Default: every direct child spans the full width. This is the baseline for
+ * everything that isn't a cue or its paired body block — the inline title
+ * (`.mod-header`), the properties/metadata block, headings, the `---` rule,
+ * the summary, and the footer. Without it, Obsidian's own wrappers (title,
+ * properties) match none of the rules below, get auto-placed into the narrow
+ * cue column, and their text wraps one character per line (the "vertical
+ * title" bug). The cue and body rules below have higher specificity and
+ * override this for their own wrappers. */
+.cornell-note .markdown-preview-sizer > * {
+  grid-column: 1 / -1;
+}
+
 /* Cue wrapper → cue column. The callout inside renders in flow at the
  * column edge (no absolute positioning needed). */
 .cornell-note .markdown-preview-sizer
@@ -150,17 +162,10 @@
   padding-left: 15px;
 }
 
-/* Headings + horizontal rule span the full width. */
-.cornell-note .markdown-preview-sizer
-  > div:has(h1, h2, h3, h4, h5, h6, hr) {
-  grid-column: 1 / -1;
-}
-
-/* Summary section spans the full width — plain prose below the `---`. */
-.cornell-note .markdown-preview-sizer
-  > div:has(.callout[data-callout="summary"]) {
-  grid-column: 1 / -1;
-}
+/* Headings, the `---` rule, and the summary section all span the full width
+ * via the default `> *` rule above — no explicit placement needed. The body
+ * rule's `:not(:has(.callout))` clause keeps the summary wrapper out of the
+ * cue-paired body column. */
 
 /* =====================================================================
  * Live Preview (CodeMirror 6) layout
