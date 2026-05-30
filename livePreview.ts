@@ -7,8 +7,7 @@ import {
 } from "@codemirror/view";
 import { Range, StateEffect } from "@codemirror/state";
 import { App, MarkdownView, TFile } from "obsidian";
-import { hasCornellCssClass, parseCornell } from "./parser";
-import { buildCueLayout, invalidFlagsFromLayout } from "./cueLayout";
+import { classifyBlocks, hasCornellCssClass } from "./classifier";
 import { ancestorChain, describeElement, Logger } from "./logger";
 
 const CUE_LINE_CLASS = "cornell-cue-line";
@@ -152,46 +151,42 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         }, 500);
 
         const text = view.state.doc.toString();
-        const result = parseCornell(text, cache?.frontmatter);
-        log?.log(
-          "  parser items:",
-          result.items.length,
-          "body lines:",
-          result.bodyLineRanges.length,
-          "gap lines:",
-          result.cueGapRanges.length
-        );
+        const slots = classifyBlocks(text, cache?.frontmatter);
+        log?.log("  slots:", slots.length);
 
-        if (!result.isCornell) return Decoration.none;
-
+        // `isCornell` was already resolved from the frontmatter above; a
+        // non-Cornell file returned early. classifyBlocks yields [] for an
+        // empty Cornell note, which simply produces no decorations.
         const ranges: Range<Decoration>[] = [];
 
-        for (const item of result.items) {
-          const cls = item.type === "cue" ? CUE_LINE_CLASS : SUMMARY_LINE_CLASS;
-          const startLineNum = view.state.doc.lineAt(item.sourceRange.from).number;
-          const endLineNum = view.state.doc.lineAt(
-            Math.max(item.sourceRange.from, item.sourceRange.to - 1)
-          ).number;
-          for (let n = startLineNum; n <= endLineNum; n++) {
-            const line = view.state.doc.line(n);
-            ranges.push(Decoration.line({ class: cls }).range(line.from));
+        for (const slot of slots) {
+          if (slot.role === "cue" || slot.role === "summary") {
+            const cls = slot.role === "cue" ? CUE_LINE_CLASS : SUMMARY_LINE_CLASS;
+            const startLineNum = view.state.doc.lineAt(slot.sourceRange.from).number;
+            const endLineNum = view.state.doc.lineAt(
+              Math.max(slot.sourceRange.from, slot.sourceRange.to - 1)
+            ).number;
+            for (let n = startLineNum; n <= endLineNum; n++) {
+              const line = view.state.doc.line(n);
+              ranges.push(Decoration.line({ class: cls }).range(line.from));
+            }
+          } else if (slot.role === "body") {
+            for (const r of slot.lineRanges) {
+              ranges.push(
+                Decoration.line({ class: BODY_LINE_CLASS }).range(
+                  view.state.doc.lineAt(r.from).from
+                )
+              );
+            }
+          } else if (slot.role === "gap") {
+            for (const r of slot.lineRanges) {
+              ranges.push(
+                Decoration.line({ class: COLLAPSED_GAP_CLASS }).range(
+                  view.state.doc.lineAt(r.from).from
+                )
+              );
+            }
           }
-        }
-
-        for (const r of result.bodyLineRanges) {
-          ranges.push(
-            Decoration.line({ class: BODY_LINE_CLASS }).range(
-              view.state.doc.lineAt(r.from).from
-            )
-          );
-        }
-
-        for (const r of result.cueGapRanges) {
-          ranges.push(
-            Decoration.line({ class: COLLAPSED_GAP_CLASS }).range(
-              view.state.doc.lineAt(r.from).from
-            )
-          );
         }
 
         // CodeMirror requires line decorations to be supplied in source-order.
@@ -199,10 +194,12 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
 
         log?.log(`  → applying ${ranges.length} line decorations`);
 
-        // Apply `.cornell-invalid` to rendered cue callouts whose parser item
-        // is flagged. Done on the next animation frame because the embed-block
+        // Apply `.cornell-invalid` to rendered cue callouts whose slot is
+        // flagged. Done on the next animation frame because the embed-block
         // DOM is populated asynchronously by Obsidian's callout renderer.
-        const invalidFlags = invalidFlagsFromLayout(buildCueLayout(result));
+        const invalidFlags = slots
+          .filter((s) => s.role === "cue")
+          .map((s) => s.invalid === "adjacent-cue");
         window.requestAnimationFrame(() => {
           markInvalidCueCallouts(view, invalidFlags);
         });
