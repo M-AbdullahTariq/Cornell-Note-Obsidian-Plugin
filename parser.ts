@@ -1,16 +1,13 @@
-// Pure parser module — no Obsidian, no DOM. Single source of truth for
-// "what does this file mean as a Cornell note." Consumed by both the
-// Reading view post-processor (Phase 2/4) and the Live Preview decorator (Phase 4).
-//
-// Given the full markdown source of a file and its parsed frontmatter, returns
-// whether the file is a Cornell note and the list of cue/summary callouts found,
-// each with its source character range and the range of the block it should
-// visually anchor to.
+// Legacy parse adapter. The placement logic now lives in `classifier.ts`
+// (the single source of truth — a list of Slots). This module derives the
+// historical `CornellParseResult` shape from that Slot list so existing
+// callers (the two renderers, cueLayout) keep working unchanged while the
+// renderers migrate to consuming Slots directly.
 
-export interface Range {
-  from: number;
-  to: number;
-}
+import { classifyBlocks, hasCornellCssClass, type Range, type Slot } from "./classifier";
+
+export type { Range } from "./classifier";
+export { hasCornellCssClass } from "./classifier";
 
 export interface CornellItem {
   type: "cue" | "summary";
@@ -42,20 +39,6 @@ export interface CornellParseResult {
   cueGapRanges: Range[];
 }
 
-const CORNELL_CLASS = "cornell-note";
-
-export function hasCornellCssClass(frontmatter: unknown): boolean {
-  if (!frontmatter || typeof frontmatter !== "object") return false;
-  const fm = frontmatter as { cssclasses?: unknown; cssclass?: unknown };
-  return matches(fm.cssclasses) || matches(fm.cssclass);
-}
-
-function matches(value: unknown): boolean {
-  if (Array.isArray(value)) return value.includes(CORNELL_CLASS);
-  if (typeof value === "string") return value.split(/\s+/).includes(CORNELL_CLASS);
-  return false;
-}
-
 export function parseCornell(
   markdown: string,
   frontmatter: unknown
@@ -70,91 +53,39 @@ export function parseCornell(
     };
   }
 
-  const lns = splitLines(markdown);
-  const kinds = classifyLines(lns);
+  const slots = classifyBlocks(markdown, frontmatter);
+
   const items: CornellItem[] = [];
+  const bodyLineRanges: Range[] = [];
   const cueGapRanges: Range[] = [];
   let firstHorizontalRule: Range | null = null;
 
-  let i = 0;
-  let lastCueItemIdx = -1;
-  let lastCueEndLineIdx = -1;
-  while (i < lns.length) {
-    const kind = kinds[i];
-    if (
-      kind.kind === "callout-start" &&
-      (kind.calloutType === "cue" || kind.calloutType === "summary")
-    ) {
-      let j = i + 1;
-      while (j < lns.length && kinds[j].kind === "callout-cont") j++;
-
-      const sourceRange: Range = { from: lns[i].start, to: lns[j - 1].end };
-      const content = extractContent(kinds, i, j);
-
-      const anchorBlockRange: Range | null =
-        kind.calloutType === "cue"
-          ? findAnchorBlock(lns, kinds, j) ?? sourceRange
-          : sourceRange;
-
-      const item: CornellItem = {
-        type: kind.calloutType,
-        sourceRange,
-        content,
-        anchorBlockRange,
-      };
-
-      if (kind.calloutType === "cue") {
-        if (
-          lastCueItemIdx >= 0 &&
-          allBlankBetween(kinds, lastCueEndLineIdx + 1, i)
-        ) {
-          item.invalid = "adjacent-cue";
-          items[lastCueItemIdx].invalid = "adjacent-cue";
+  for (const slot of slots) {
+    switch (slot.role) {
+      case "cue":
+      case "summary":
+        items.push({
+          type: slot.role,
+          sourceRange: slot.sourceRange,
+          content: slot.content ?? "",
+          anchorBlockRange:
+            slot.role === "cue"
+              ? slot.anchorBlockRange ?? slot.sourceRange
+              : slot.sourceRange,
+          ...(slot.invalid ? { invalid: slot.invalid } : {}),
+        });
+        break;
+      case "body":
+        bodyLineRanges.push(...slot.lineRanges);
+        break;
+      case "gap":
+        cueGapRanges.push(...slot.lineRanges);
+        break;
+      case "full":
+        if (slot.isHorizontalRule && firstHorizontalRule === null) {
+          firstHorizontalRule = slot.sourceRange;
         }
-
-        // Collect blank lines immediately after the cue, up to the first
-        // non-blank source line. Live Preview collapses these so the cue
-        // visually lands on the same row as its anchor body block.
-        for (let g = j; g < lns.length && kinds[g].kind === "blank"; g++) {
-          cueGapRanges.push({ from: lns[g].start, to: lns[g].end });
-        }
-      }
-
-      items.push(item);
-
-      if (kind.calloutType === "cue") {
-        lastCueItemIdx = items.length - 1;
-        lastCueEndLineIdx = j - 1;
-      }
-
-      i = j;
-    } else {
-      if (firstHorizontalRule === null && kind.kind === "horizontal-rule") {
-        firstHorizontalRule = { from: lns[i].start, to: lns[i].end };
-      }
-      i++;
-    }
-  }
-
-  // Body-line ranges: lines that should get the per-line divider in Live
-  // Preview. Mirrors Reading view's `:has(p, ul, ol, pre, blockquote)`
-  // wrapper match — i.e. paragraphs, list items, code-fence content, and
-  // plain `> ` blockquotes (which fall through to `body` kind here because
-  // they have no callout-start ancestor). Runs over the WHOLE file so that
-  // Cornell sections appearing after the summary's `---` (multiple sections
-  // per file, as the README documents) keep their divider — matching Reading
-  // view, whose `:not(:has(.callout))` rule borders every body wrapper
-  // regardless of position. Summary callout lines, headings, and horizontal
-  // rules are their own line kinds, so they are naturally excluded here.
-  const bodyLineRanges: Range[] = [];
-  for (let k = 0; k < lns.length; k++) {
-    const kk = kinds[k];
-    if (
-      kk.kind === "body" ||
-      kk.kind === "code-fence" ||
-      kk.kind === "code-inside"
-    ) {
-      bodyLineRanges.push({ from: lns[k].start, to: lns[k].end });
+        break;
     }
   }
 
@@ -165,190 +96,4 @@ export function parseCornell(
     bodyLineRanges,
     cueGapRanges,
   };
-}
-
-// ----- internals -----
-
-interface Line {
-  text: string;
-  start: number;
-  end: number;
-}
-
-type LineKind =
-  | { kind: "frontmatter" }
-  | { kind: "frontmatter-fence" }
-  | { kind: "code-fence" }
-  | { kind: "code-inside" }
-  | { kind: "callout-start"; calloutType: "cue" | "summary" | string; titleText: string }
-  | { kind: "callout-cont"; bodyText: string }
-  | { kind: "blank" }
-  | { kind: "heading"; level: number }
-  | { kind: "horizontal-rule" }
-  | { kind: "body" };
-
-function splitLines(text: string): Line[] {
-  const out: Line[] = [];
-  let start = 0;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] === "\n") {
-      let lineText = text.slice(start, i);
-      if (lineText.endsWith("\r")) lineText = lineText.slice(0, -1);
-      out.push({ text: lineText, start, end: i + 1 });
-      start = i + 1;
-    }
-  }
-  if (start < text.length) {
-    let lineText = text.slice(start);
-    if (lineText.endsWith("\r")) lineText = lineText.slice(0, -1);
-    out.push({ text: lineText, start, end: text.length });
-  }
-  return out;
-}
-
-function classifyLines(lns: Line[]): LineKind[] {
-  const out: LineKind[] = [];
-  let inFrontmatter = false;
-  let frontmatterClosed = false;
-  let inCodeFence = false;
-  let codeFenceMarker = "";
-
-  for (let i = 0; i < lns.length; i++) {
-    const text = lns[i].text;
-
-    if (!frontmatterClosed && i === 0 && text.trim() === "---") {
-      inFrontmatter = true;
-      out.push({ kind: "frontmatter-fence" });
-      continue;
-    }
-    if (inFrontmatter) {
-      if (text.trim() === "---") {
-        inFrontmatter = false;
-        frontmatterClosed = true;
-        out.push({ kind: "frontmatter-fence" });
-      } else {
-        out.push({ kind: "frontmatter" });
-      }
-      continue;
-    }
-
-    const fenceMatch = text.match(/^\s*(`{3,}|~{3,})/);
-    if (inCodeFence) {
-      if (
-        fenceMatch &&
-        fenceMatch[1][0] === codeFenceMarker[0] &&
-        fenceMatch[1].length >= codeFenceMarker.length
-      ) {
-        inCodeFence = false;
-        codeFenceMarker = "";
-        out.push({ kind: "code-fence" });
-      } else {
-        out.push({ kind: "code-inside" });
-      }
-      continue;
-    }
-    if (fenceMatch) {
-      inCodeFence = true;
-      codeFenceMarker = fenceMatch[1];
-      out.push({ kind: "code-fence" });
-      continue;
-    }
-
-    if (text.trim() === "") {
-      out.push({ kind: "blank" });
-      continue;
-    }
-
-    const calloutStart = text.match(/^>\s*\[!(\w[\w-]*)\][+-]?\s*(.*)$/);
-    if (calloutStart) {
-      out.push({
-        kind: "callout-start",
-        calloutType: calloutStart[1].toLowerCase(),
-        titleText: calloutStart[2].trim(),
-      });
-      continue;
-    }
-
-    const calloutCont = text.match(/^>\s?(.*)$/);
-    if (calloutCont) {
-      const prev = out[out.length - 1];
-      if (prev && (prev.kind === "callout-start" || prev.kind === "callout-cont")) {
-        out.push({ kind: "callout-cont", bodyText: calloutCont[1] });
-        continue;
-      }
-    }
-
-    const headingMatch = text.match(/^(#+)\s+/);
-    if (headingMatch) {
-      out.push({ kind: "heading", level: headingMatch[1].length });
-      continue;
-    }
-
-    // A horizontal rule: 3+ hyphens (or `*` / `_`), optional surrounding
-    // whitespace, nothing else. The frontmatter case has already been handled
-    // above, so any `---` reaching here is a real rule.
-    if (/^\s*([-*_])(?:\s*\1){2,}\s*$/.test(text)) {
-      out.push({ kind: "horizontal-rule" });
-      continue;
-    }
-
-    out.push({ kind: "body" });
-  }
-
-  return out;
-}
-
-function allBlankBetween(
-  kinds: LineKind[],
-  from: number,
-  toExclusive: number
-): boolean {
-  for (let k = from; k < toExclusive; k++) {
-    if (kinds[k].kind !== "blank") return false;
-  }
-  return true;
-}
-
-function extractContent(kinds: LineKind[], i: number, j: number): string {
-  const startKind = kinds[i];
-  if (startKind.kind !== "callout-start") return "";
-  let content = startKind.titleText;
-  for (let k = i + 1; k < j; k++) {
-    const kk = kinds[k];
-    if (kk.kind === "callout-cont" && kk.bodyText.trim()) {
-      if (content) content += "\n";
-      content += kk.bodyText;
-    }
-  }
-  return content;
-}
-
-function findAnchorBlock(
-  lns: Line[],
-  kinds: LineKind[],
-  start: number
-): Range | null {
-  let k = start;
-  while (k < lns.length && kinds[k].kind === "blank") k++;
-  if (k >= lns.length) return null;
-  if (kinds[k].kind === "callout-start") {
-    // Another callout follows immediately. Skip past it to find a real block.
-    let nextStart = k + 1;
-    while (nextStart < lns.length && kinds[nextStart].kind === "callout-cont") {
-      nextStart++;
-    }
-    return findAnchorBlock(lns, kinds, nextStart);
-  }
-
-  const firstLine = lns[k];
-  let m = k + 1;
-  while (
-    m < lns.length &&
-    kinds[m].kind !== "blank" &&
-    kinds[m].kind !== "callout-start"
-  ) {
-    m++;
-  }
-  const lastLine = lns[m - 1];
-  return { from: firstLine.start, to: lastLine.end };
 }
