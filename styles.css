@@ -143,29 +143,26 @@
   grid-column: 1 / -1;
 }
 
-/* Cue wrapper → cue column. The callout inside renders in flow at the
- * column edge (no absolute positioning needed). */
-.cornell-note .markdown-preview-sizer
-  > div:has(.callout[data-callout="cue"]) {
+/* Placement is driven by the `data-cornell-slot` attribute the post-processor
+ * stamps on each grid-item wrapper (resolved from source position via the
+ * classifier) — not by fragile `:has()` content guesswork. A wrapper with no
+ * attribute (e.g. the inline title, or a block whose section info was
+ * unavailable) keeps the full-width default above, which degrades gracefully. */
+
+/* Cue → cue column. The callout inside renders in flow at the column edge. */
+.cornell-note .markdown-preview-sizer > [data-cornell-slot="cue"] {
   grid-column: 1;
 }
 
-/* Body wrapper → body column, with the per-block divider line. We exclude
- * wrappers that contain any callout (cue OR summary) so the cue wrapper
- * doesn't also get the body divider, and the summary doesn't either.
- * `table` is in the allowlist so a markdown table after a cue pairs with
- * it on the same grid row, matching paragraph/list behaviour. */
-.cornell-note .markdown-preview-sizer
-  > div:has(p, ul, ol, pre, blockquote, table):not(:has(.callout)) {
+/* Body → body column, with the per-block divider line. */
+.cornell-note .markdown-preview-sizer > [data-cornell-slot="body"] {
   grid-column: 3;
   border-left: var(--cue-line);
   padding-left: 15px;
 }
 
-/* Headings, the `---` rule, and the summary section all span the full width
- * via the default `> *` rule above — no explicit placement needed. The body
- * rule's `:not(:has(.callout))` clause keeps the summary wrapper out of the
- * cue-paired body column. */
+/* `summary` and `full` slots span the full width via the default `> *` rule
+ * above — no explicit placement needed. */
 
 /* =====================================================================
  * Live Preview (CodeMirror 6) layout

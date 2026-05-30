@@ -1,7 +1,6 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
 import { EditorView } from "@codemirror/view";
-import { hasCornellCssClass, parseCornell } from "./parser";
-import { buildCueLayout, invalidFlagsFromLayout } from "./cueLayout";
+import { hasCornellCssClass, slotForLineRange } from "./classifier";
 import {
   buildCornellEditorExtension,
   cornellRefreshEffect,
@@ -19,6 +18,8 @@ const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
 const LOG_PATH = "cornell-debug.log";
+const INVALID_TOOLTIP =
+  "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
 const CORNELL_TEMPLATE = `---
 cssclasses:
@@ -46,6 +47,17 @@ More notes...
 > [!summary]
 > Write your summary here.
 `;
+
+/** Walk up from a rendered element to the `.markdown-preview-sizer`'s direct
+ *  child — the element that becomes a grid item. Returns null if none is found
+ *  (e.g. the element is detached), in which case the caller stamps `el` itself. */
+function sizerChild(el: HTMLElement): HTMLElement | null {
+  let e: HTMLElement | null = el;
+  while (e && !e.parentElement?.classList.contains("markdown-preview-sizer")) {
+    e = e.parentElement;
+  }
+  return e;
+}
 
 export default class CornellNotesPlugin extends Plugin {
   settings: CornellSettings = { ...DEFAULT_SETTINGS };
@@ -88,28 +100,44 @@ export default class CornellNotesPlugin extends Plugin {
       const cache = this.app.metadataCache.getFileCache(file);
       if (!hasCornellCssClass(cache?.frontmatter)) return;
 
-      const previewRoot = el.closest(".markdown-preview-view");
-      if (!previewRoot) return;
+      // Resolve which slot this rendered block is by SOURCE POSITION rather
+      // than DOM index: getSectionInfo gives the block's line range, and the
+      // classifier maps that range to a slot. Robust to partial / out-of-order
+      // section renders. A block with no section info (e.g. the inline title)
+      // gets no attribute and falls back to the full-width default in CSS.
+      const info = ctx.getSectionInfo(el);
+      if (!info) return;
 
       const source = await this.app.vault.cachedRead(file);
-      const flags = invalidFlagsFromLayout(
-        buildCueLayout(parseCornell(source, cache?.frontmatter))
+      const slot = slotForLineRange(
+        source,
+        cache?.frontmatter,
+        info.lineStart,
+        info.lineEnd
       );
-      const cueEls = previewRoot.querySelectorAll<HTMLElement>(
-        '.callout[data-callout="cue"]'
-      );
-      cueEls.forEach((cueEl, idx) => {
-        const invalid = !!flags[idx];
-        cueEl.classList.toggle("cornell-invalid", invalid);
-        if (invalid) {
-          cueEl.setAttribute(
-            "title",
-            "Cue has no body block before the next cue. Add content below, or merge the cues."
-          );
-        } else {
-          cueEl.removeAttribute("title");
+      if (!slot) return;
+
+      // Stamp the slot role on the grid-item wrapper (the preview-sizer's
+      // direct child) so the stylesheet can place it without `:has()` guesswork.
+      const wrapper = sizerChild(el) ?? el;
+      wrapper.setAttribute("data-cornell-slot", slot.role);
+
+      // Mark this section's cue invalid (adjacent-cue) directly — no whole-
+      // preview index matching.
+      if (slot.role === "cue") {
+        const cueEl = el.querySelector<HTMLElement>(
+          '.callout[data-callout="cue"]'
+        );
+        if (cueEl) {
+          const invalid = slot.invalid === "adjacent-cue";
+          cueEl.classList.toggle("cornell-invalid", invalid);
+          if (invalid) {
+            cueEl.setAttribute("title", INVALID_TOOLTIP);
+          } else {
+            cueEl.removeAttribute("title");
+          }
         }
-      });
+      }
     });
 
     this.registerEvent(
