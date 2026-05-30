@@ -3,11 +3,16 @@
 // (no type-checking) — the pure parser/cueLayout modules have no Obsidian or
 // DOM dependencies, so they bundle cleanly for Node.
 import { build } from "esbuild";
-import { readdirSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
+
+// Clear stale bundles first, so a deleted *.test.ts can't linger in dist and
+// keep running (it would carry an inlined copy of since-deleted source).
+rmSync(join(testsDir, "dist"), { recursive: true, force: true });
+
 const entryPoints = readdirSync(testsDir)
   .filter((f) => f.endsWith(".test.ts"))
   .map((f) => join(testsDir, f));

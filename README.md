@@ -51,11 +51,12 @@ Changes apply live — no plugin reload required.
 
 ## Architecture
 
-- `parser.ts` — pure module that identifies cue / summary callouts and their anchor blocks. No Obsidian or DOM dependencies.
-- `livePreview.ts` — CodeMirror `ViewPlugin` that applies line decorations to cue / summary source lines.
-- `main.ts` — plugin entry. Registers the editor extension, the Reading-view post-processor, the settings tab, and listens for metadata changes.
+- `classifier.ts` — pure module, the single source of truth for placement. `classifyBlocks` turns a note's source into an ordered list of *slots* (`cue`, `summary`, `body`, `full`, `gap`), each with a block range and per-line ranges. `slotForLineRange` maps a source line range (from `getSectionInfo`) to its slot for Reading view. No Obsidian or DOM dependencies.
+- `livePreview.ts` — CodeMirror `ViewPlugin` that maps slots to line decorations on cue / summary / body / gap source lines.
+- `main.ts` — plugin entry. Registers the editor extension, the Reading-view post-processor (which stamps `data-cornell-slot` on each block from its slot), the settings tab, and listens for metadata changes.
 - `settings.ts` — settings interface + tab UI.
-- `styles.css` — visual layout. CSS variables (`--cue-width`, `--cue-line-color`, `--cue-line-thickness`) are written to `:root` by the plugin so settings updates re-flow the page without restyling.
+- `styles.css` — visual layout. Reading view places blocks by their `data-cornell-slot` attribute; CSS variables (`--cue-width`, `--cue-line-color`, `--cue-line-thickness`) are written to `:root` by the plugin so settings updates re-flow the page without restyling.
+- `tests/` — `node:test` fixtures over the pure classifier; run with `npm test`.
 
 ## Build
 

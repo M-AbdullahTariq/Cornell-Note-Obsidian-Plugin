@@ -1,9 +1,9 @@
 // Pure classification module — no Obsidian, no DOM, no CodeMirror.
 //
 // Single source of truth for "what placement role does each top-level block of
-// a Cornell note have." Both renderers (Reading view post-processor, Live
-// Preview view plugin) and the legacy `parseCornell` adapter derive their views
-// from the Slot list this produces.
+// a Cornell note have." Both renderers — the Reading view post-processor and
+// the Live Preview view plugin — derive their layout from the Slot list this
+// produces, so placement is decided in exactly one place.
 //
 // A Slot carries BOTH a block-level `sourceRange` (what Reading view's
 // per-wrapper layout needs) and per-line `lineRanges` (what Live Preview's
