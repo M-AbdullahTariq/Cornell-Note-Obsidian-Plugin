@@ -114,3 +114,62 @@ line three
   assert.ok(body);
   assert.equal(body!.lineRanges.length, 3);
 });
+
+/** True when `marker` falls inside some body slot (i.e. it gets the divider). */
+function bodyCovers(md: string, marker: string): boolean {
+  const off = md.indexOf(marker);
+  assert.ok(off >= 0, `marker not found: ${marker}`);
+  return classifyBlocks(md, FM).some(
+    (s) => s.role === "body" && off >= s.sourceRange.from && off < s.sourceRange.to
+  );
+}
+
+// Regression: body content after the summary's `---` must still be body
+// (the divider bug). Both the pre-rule and post-summary blocks count.
+test("body before and after the summary rule are both body slots", () => {
+  const md = `---
+cssclasses:
+  - cornell-note
+---
+
+> [!cue] One
+## One
+
+FIRST_BODY
+
+---
+
+# Summary
+
+> [!summary]
+> sum
+
+---
+
+> [!cue] Two
+
+POST_SUMMARY_BODY
+`;
+  assert.ok(bodyCovers(md, "FIRST_BODY"));
+  assert.ok(bodyCovers(md, "POST_SUMMARY_BODY"));
+});
+
+test("a table after a cue is a body slot", () => {
+  const md = `> [!cue] T
+
+| TABLE_HEAD | b |
+| --- | --- |
+| 1 | 2 |
+`;
+  assert.ok(bodyCovers(md, "TABLE_HEAD"));
+});
+
+test("a cue with a body block is not flagged invalid", () => {
+  const md = `> [!cue] Valid
+## Valid
+
+body
+`;
+  const cue = classifyBlocks(md, FM).find((s) => s.role === "cue");
+  assert.equal(cue?.invalid, undefined);
+});
