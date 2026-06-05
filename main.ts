@@ -1,6 +1,10 @@
 import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
 import { EditorView } from "@codemirror/view";
-import { classifySection, hasCornellCssClass } from "./classifier";
+import {
+  classifySection,
+  hasCornellCssClass,
+  leadsWithTitle,
+} from "./classifier";
 import {
   buildCornellEditorExtension,
   buildCueExpander,
@@ -92,6 +96,21 @@ export default class CornellNotesPlugin extends Plugin {
       const cache = this.app.metadataCache.getFileCache(file);
       if (!hasCornellCssClass(cache?.frontmatter)) return;
 
+      const source = await this.app.vault.cachedRead(file);
+
+      // Title fallback: when the file leads with a `>[!title]`, hide Obsidian's
+      // built-in inline (file-name) title so only the explicit title shows;
+      // otherwise leave it as the file-name fallback. The flag lives on the
+      // preview sizer — a stable ancestor of every block — and the toggle is
+      // idempotent across the per-block post-processor calls.
+      const sizer = el.closest(".markdown-preview-sizer");
+      if (sizer) {
+        sizer.classList.toggle(
+          "cornell-leading-title",
+          leadsWithTitle(source, cache?.frontmatter)
+        );
+      }
+
       // Resolve which slot this rendered block is by SOURCE POSITION rather
       // than DOM index: getSectionInfo gives the block's line range, and the
       // classifier maps that range to a slot. Robust to partial / out-of-order
@@ -100,7 +119,6 @@ export default class CornellNotesPlugin extends Plugin {
       const info = ctx.getSectionInfo(el);
       if (!info) return;
 
-      const source = await this.app.vault.cachedRead(file);
       const resolved = classifySection(
         source,
         cache?.frontmatter,

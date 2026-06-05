@@ -15,7 +15,7 @@ export interface Range {
   to: number;
 }
 
-export type SlotRole = "cue" | "summary" | "body" | "full" | "gap";
+export type SlotRole = "cue" | "summary" | "body" | "full" | "gap" | "title";
 
 export interface Slot {
   role: SlotRole;
@@ -23,7 +23,7 @@ export interface Slot {
   sourceRange: Range;
   /** Per-source-line char ranges making up the block, in order. */
   lineRanges: Range[];
-  /** Cue / summary only: the callout's title + body text. */
+  /** Cue / summary / title only: the callout's title + body text. */
   content?: string;
   /** Cue only: char range of the body block this cue anchors to (falls back to
    *  the cue's own range when there is no external body block). */
@@ -39,6 +39,11 @@ export interface Slot {
   notesEnd?: boolean;
   /** `full` only: true when the block is a horizontal rule `---`. */
   isHorizontalRule?: boolean;
+  /** 0-based Cornell "page" this slot belongs to. A `>[!title]` callout starts
+   *  a new page; everything before the first title is page 0 (the file-name
+   *  page). Renderers use it to scope a summary to its page and to separate
+   *  consecutive pages. */
+  page?: number;
 }
 
 const CORNELL_CLASS = "cornell-note";
@@ -135,6 +140,23 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
       continue;
     }
 
+    // --- Title callout → full-width page title -----------------------------
+    // `>[!title]` renders as a full-width title and delimits a new Cornell
+    // "page" (see the page-assignment pass below). Like the summary it spans
+    // all columns; unlike other callouts it is NOT body.
+    if (kind.kind === "callout-start" && kind.calloutType === "title") {
+      let m = i + 1;
+      while (m < lns.length && kinds[m].kind === "callout-cont") m++;
+      slots.push({
+        role: "title",
+        sourceRange: blockRange(i, m),
+        lineRanges: lineRangesOf(i, m),
+        content: extractContent(kinds, i, m),
+      });
+      i = m;
+      continue;
+    }
+
     // --- Other callout (note/warning/etc.) → body --------------------------
     // A non-cue / non-summary callout placed in a note is treated as ordinary
     // notes content: it joins the body column and carries the divider line,
@@ -226,7 +248,42 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
     if (!next || next.role !== "body") slots[s].notesEnd = true;
   }
 
+  // Page assignment: a `>[!title]` starts a new page. Everything before the
+  // first title is page 0 (the file-name page); each title increments the
+  // counter so its block and the content beneath it share a page number.
+  let page = 0;
+  for (const slot of slots) {
+    if (slot.role === "title") page++;
+    slot.page = page;
+  }
+
   return slots;
+}
+
+/** True when the document's first content block (after any YAML frontmatter)
+ *  is a `>[!title]` callout WITH text — i.e. the user explicitly titled the
+ *  first page. Reading view uses this to decide whether to hide Obsidian's
+ *  built-in inline (file-name) title: hide it when the file leads with a title,
+ *  keep it as the file-name fallback otherwise. Any leading content (a heading
+ *  or paragraph) before the first title makes this false.
+ *
+ *  An empty `>[!title]` (no text) does NOT count: it still delimits a page, but
+ *  with no title text there is nothing to replace the file name, so the
+ *  file-name fallback stays visible until the user types a title. This avoids a
+ *  blank title band while the user is mid-typing a fresh `>[!title]`. */
+export function leadsWithTitle(markdown: string, frontmatter: unknown): boolean {
+  const slots = classifyBlocks(markdown, frontmatter);
+  if (slots.length === 0) return false;
+  let idx = 0;
+  // Skip a leading YAML frontmatter block — the first `full` slot at offset 0
+  // when the document opens with a `---` fence.
+  if (slots[0].role === "full" && slots[0].sourceRange.from === 0) {
+    const nl = markdown.indexOf("\n");
+    const firstLine = nl === -1 ? markdown : markdown.slice(0, nl);
+    if (firstLine.trim() === "---") idx = 1;
+  }
+  const lead = slots[idx];
+  return lead?.role === "title" && !!lead.content?.trim();
 }
 
 /** Reading-view bridge: given a source line range (as Obsidian's

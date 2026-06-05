@@ -11,6 +11,7 @@ import { classifyBlocks, hasCornellCssClass } from "./classifier";
 
 const CUE_LINE_CLASS = "cornell-cue-line";
 const SUMMARY_LINE_CLASS = "cornell-summary-line";
+const TITLE_LINE_CLASS = "cornell-title-line";
 const BODY_LINE_CLASS = "cornell-body-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
@@ -89,8 +90,17 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         const ranges: Range<Decoration>[] = [];
 
         for (const slot of slots) {
-          if (slot.role === "cue" || slot.role === "summary") {
-            const cls = slot.role === "cue" ? CUE_LINE_CLASS : SUMMARY_LINE_CLASS;
+          if (
+            slot.role === "cue" ||
+            slot.role === "summary" ||
+            slot.role === "title"
+          ) {
+            const cls =
+              slot.role === "cue"
+                ? CUE_LINE_CLASS
+                : slot.role === "summary"
+                ? SUMMARY_LINE_CLASS
+                : TITLE_LINE_CLASS;
             const startLineNum = view.state.doc.lineAt(slot.sourceRange.from).number;
             const endLineNum = view.state.doc.lineAt(
               Math.max(slot.sourceRange.from, slot.sourceRange.to - 1)

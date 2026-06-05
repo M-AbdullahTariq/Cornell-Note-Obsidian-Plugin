@@ -13,6 +13,9 @@
   --cue-line-thickness: 1px;
   --cue-line: var(--cue-line-thickness) solid var(--cue-line-color);
   --cue-column-offset: calc(var(--cue-width) + var(--cue-gap));
+  /* Large whitespace gap above the 2nd-and-later page title, giving a
+   * page-break feel between stacked Cornell pages — no drawn line. */
+  --cornell-page-gap: 6em;
 }
 
 /* =====================================================================
@@ -133,6 +136,47 @@
   color: var(--text-normal);
 }
 
+/* Title callout: strip all chrome so `>[!title] Text` renders as a plain
+ * title line, not a boxed callout. The title text lives in the callout title
+ * (the `Text` after `[!title]`), so — unlike the summary — we KEEP the title
+ * visible and hide only the icon. Visual emphasis (centering, weight) is
+ * applied in the shared title rule below; this just removes the box. */
+.cornell-note .callout[data-callout="title"] {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+  mix-blend-mode: normal;
+}
+
+.cornell-note .callout[data-callout="title"] .callout-icon {
+  display: none;
+}
+
+/* Shared title emphasis (Reading view + Live Preview render the same callout
+ * DOM): full-width, centered, heading-weight. Reset the default flex title to
+ * `block` so `text-align: center` actually centers the inner text. Sizing keys
+ * off the inline-title vars so an explicit `>[!title]` matches the file-name
+ * fallback title it replaces. */
+.cornell-note .callout[data-callout="title"] .callout-title {
+  display: block;
+  text-align: center;
+  padding: 0;
+  background: transparent;
+  gap: 0;
+}
+
+.cornell-note .callout[data-callout="title"] .callout-title-inner {
+  font-family: var(--inline-title-font, var(--font-text));
+  font-size: var(--inline-title-size, var(--h1-size));
+  font-weight: var(--inline-title-weight, var(--h1-weight, 700));
+  line-height: var(--line-height);
+  color: var(--inline-title-color, var(--text-normal));
+  white-space: normal;
+}
+
 /* =====================================================================
  * Reading view layout — CSS Grid
  *
@@ -183,6 +227,16 @@
   grid-column: 1 / -1;
 }
 
+/* File-name fallback: when the file leads with an explicit `>[!title]`, the
+ * plugin flags the sizer `cornell-leading-title` (see main.ts) and we hide
+ * Obsidian's built-in inline (file-name) title, so only the explicit title is
+ * shown. Without a leading title the flag is absent and the inline title stays
+ * as the file-name fallback. */
+.cornell-note .markdown-preview-sizer.cornell-leading-title > .mod-header,
+.cornell-note .markdown-preview-sizer.cornell-leading-title .inline-title {
+  display: none;
+}
+
 /* Placement is driven by the `data-cornell-slot` attribute the post-processor
  * stamps on each grid-item wrapper (resolved from source position via the
  * classifier) — not by fragile `:has()` content guesswork. A wrapper with no
@@ -220,21 +274,22 @@
   margin-bottom: var(--cue-gap);
 }
 
-/* Summary → notes column WITH the divider, not full-width. Placing it in
- * column 3 (like a body block) leaves the cue column empty beside it, so the
- * vertical cue|notes divider line continues straight down through the summary
- * instead of stopping at the last note. `align-self: stretch` keeps the border
- * spanning the whole row, matching the body divider exactly. */
-.cornell-note .markdown-preview-sizer > [data-cornell-slot="summary"] {
-  grid-column: 3;
-  align-self: stretch;
-  border-left: var(--cue-line);
-  padding-left: 15px;
-  margin: 0;
-}
+/* Summary → full-width band across BOTH columns at the bottom of its page,
+ * like the classic Cornell sheet. It spans every grid track via the default
+ * `> *` rule above (grid-column: 1 / -1), so no explicit placement is needed —
+ * and no cue|notes divider runs through it. `summary` and the `full` slots
+ * (headings, the `---` rule, frontmatter) all use that default. */
 
-/* `full` slots (headings, the `---` rule, frontmatter) still span the full
- * width via the default `> *` rule above — no explicit placement needed. */
+/* Page-break gap: every title wrapper preceded by an earlier title (i.e. the
+ * 2nd page onward) gets a large top margin, so stacked pages read as separate
+ * sheets. The first title has no preceding title sibling and stays flush with
+ * the top. Whitespace only — no drawn line. */
+.cornell-note
+  .markdown-preview-sizer
+  > [data-cornell-slot="title"]
+  ~ [data-cornell-slot="title"] {
+  margin-top: var(--cornell-page-gap);
+}
 
 /* =====================================================================
  * Live Preview (CodeMirror 6) layout
@@ -387,14 +442,25 @@
 /* Strip the CM6 embed-block chrome around the rendered summary so it
  * reads as plain prose, matching the shared inner-callout stripping. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
-  padding: 0 0 0 15px !important;
+  padding: 0 !important;
   margin: 0 !important;
   contain: none !important;
   background: transparent !important;
   border: none !important;
-  /* Keep the left divider so the summary reads as part of the notes column,
-   * matching Reading view and the source-mode summary line above. */
-  border-left: var(--cue-line) !important;
+  box-shadow: none !important;
+}
+
+/* Same treatment for the rendered title widget (cursor outside the title):
+ * strip the embed-block chrome so the title reads as a plain line, matching
+ * the shared inner-callout stripping above. The negative left margin pulls it
+ * out of the reserved cue-column indent so it spans the full width, like the
+ * Reading-view title. */
+.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="title"]) {
+  padding: 0 !important;
+  margin: 0 0 0 calc(0px - var(--cue-column-offset)) !important;
+  contain: none !important;
+  background: transparent !important;
+  border: none !important;
   box-shadow: none !important;
 }
 
@@ -408,10 +474,38 @@
 }
 
 /* Source-mode summary line (cursor inside, raw `> [!summary]` text
- * visible). Stays in the body column as plain prose, and now carries the same
- * divider line as the notes above it (matching Reading view's summary). */
+ * visible). Full-width plain prose — no cue|notes divider, matching the
+ * full-width summary band in Reading view. */
 .cornell-note .cm-line.cornell-summary-line {
   font-style: normal;
-  border-left: var(--cue-line);
-  padding-left: 15px;
+}
+
+/* Source-mode title line (raw `> [!title]` text visible). Pull it out of the
+ * reserved cue-column indent so it spans the full width like Reading view and
+ * the rendered title widget, rather than sitting in the notes column. Stays
+ * inline-editable. */
+.cornell-note .cm-line.cornell-title-line {
+  margin-left: calc(0px - var(--cue-column-offset));
+  text-align: center;
+  font-size: var(--inline-title-size, var(--h1-size));
+  font-weight: var(--inline-title-weight, var(--h1-weight, 700));
+}
+
+/* Live Preview page-break gap. A title is either the source line (cursor
+ * inside) or the rendered title embed-block (cursor outside), so a title can be
+ * preceded by either form — all four combinations get the gap. `!important`
+ * overrides the embed-block's `margin: 0 ... !important` chrome-strip above
+ * (only the top is raised; the negative left margin there is untouched). The
+ * first title in the document has no preceding title and stays flush. */
+.cornell-note .cm-line.cornell-title-line ~ .cm-line.cornell-title-line,
+.cornell-note
+  .cm-line.cornell-title-line
+  ~ .cm-embed-block:has(.callout[data-callout="title"]),
+.cornell-note
+  .cm-embed-block:has(.callout[data-callout="title"])
+  ~ .cm-line.cornell-title-line,
+.cornell-note
+  .cm-embed-block:has(.callout[data-callout="title"])
+  ~ .cm-embed-block:has(.callout[data-callout="title"]) {
+  margin-top: var(--cornell-page-gap) !important;
 }
