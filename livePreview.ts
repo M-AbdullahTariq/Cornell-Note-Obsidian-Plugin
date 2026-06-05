@@ -140,6 +140,58 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
   );
 }
 
+export interface CueExpanderContext {
+  app: App;
+  /** Read live so a settings change takes effect without reload. */
+  getTrigger: () => string;
+}
+
+/** Auto-expand a configurable trigger word into a cue. When the user types the
+ *  trigger so that a line's entire text equals it (e.g. the line becomes `cc`)
+ *  inside a Cornell note, replace that line with `> [!cue] ` and move the
+ *  cursor to the end. Anchoring on whole-line equality keeps it from firing on
+ *  the trigger word mid-sentence — a cue is always its own `>` line anyway. */
+export function buildCueExpander(ctx: CueExpanderContext) {
+  return ViewPlugin.fromClass(
+    class {
+      constructor(_view: EditorView) {}
+
+      update(update: ViewUpdate) {
+        if (!update.docChanged) return;
+
+        const trigger = ctx.getTrigger().trim();
+        if (!trigger) return;
+
+        const view = update.view;
+        const file = findFileForEditor(view, ctx.app);
+        if (!file) return;
+        const cache = ctx.app.metadataCache.getFileCache(file);
+        if (!hasCornellCssClass(cache?.frontmatter)) return;
+
+        const sel = view.state.selection.main;
+        if (!sel.empty) return;
+        const line = view.state.doc.lineAt(sel.head);
+        if (sel.head !== line.to || line.text !== trigger) return;
+
+        // Dispatching during an update is illegal in CodeMirror, so defer to a
+        // microtask. Re-validate against the (possibly changed) current state
+        // before committing the replacement.
+        const from = line.from;
+        queueMicrotask(() => {
+          if (from > view.state.doc.length) return;
+          const ln = view.state.doc.lineAt(from);
+          if (ln.from !== from || ln.text !== trigger) return;
+          const insert = "> [!cue] ";
+          view.dispatch({
+            changes: { from: ln.from, to: ln.to, insert },
+            selection: { anchor: ln.from + insert.length },
+          });
+        });
+      }
+    }
+  );
+}
+
 function markInvalidCueCallouts(view: EditorView, flags: boolean[]): void {
   const cueEls = view.dom.querySelectorAll<HTMLElement>(
     '.callout[data-callout="cue"]'

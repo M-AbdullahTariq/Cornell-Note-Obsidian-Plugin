@@ -135,12 +135,18 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
       continue;
     }
 
-    // --- Other callout (note/warning/etc.) → full-width block --------------
+    // --- Other callout (note/warning/etc.) → body --------------------------
+    // A non-cue / non-summary callout placed in a note is treated as ordinary
+    // notes content: it joins the body column and carries the divider line,
+    // exactly like a paragraph or table. This keeps "everything under a cue
+    // belongs to the cue" visually true — an embedded admonition, image, or
+    // table all sit in the notes region with the same block line. (Headings,
+    // horizontal rules, the summary, and frontmatter remain full-width below.)
     if (kind.kind === "callout-start") {
       let m = i + 1;
       while (m < lns.length && kinds[m].kind === "callout-cont") m++;
       slots.push({
-        role: "full",
+        role: "body",
         sourceRange: blockRange(i, m),
         lineRanges: lineRangesOf(i, m),
       });

@@ -164,6 +164,40 @@ test("a table after a cue is a body slot", () => {
   assert.ok(bodyCovers(md, "TABLE_HEAD"));
 });
 
+// A non-cue / non-summary callout under a cue is notes content: it must be a
+// body slot so it joins the notes column and carries the divider line, just
+// like a paragraph, table, or image. (Cue and summary callouts keep their own
+// roles; only "other" callouts changed.)
+test("a note/tip callout is a body slot (gets the divider)", () => {
+  const md = `> [!cue] C
+
+> [!note] NESTED_NOTE
+> body of the admonition
+
+> [!tip] NESTED_TIP
+> a tip
+`;
+  assert.ok(bodyCovers(md, "NESTED_NOTE"));
+  assert.ok(bodyCovers(md, "NESTED_TIP"));
+  // The two cue/summary roles are unaffected; no slot here is "full".
+  assert.ok(!classifyBlocks(md, FM).some((s) => s.role === "full"));
+});
+
+// The summary callout still resolves to its own role, not body — only generic
+// callouts were redirected.
+test("the summary callout is still a summary slot, not body", () => {
+  const md = `> [!cue] C
+
+body
+
+> [!summary]
+> SUMMARY_TEXT
+`;
+  const summary = classifyBlocks(md, FM).find((s) => s.role === "summary");
+  assert.ok(summary, "summary callout should keep the summary role");
+  assert.ok(!bodyCovers(md, "SUMMARY_TEXT"));
+});
+
 // Regression for the divider-continuity bug (wrong.jpg): within one cue's
 // notes region the divider must be unbroken, breaking only before the next
 // cue. The classifier marks the LAST body block of each region with notesEnd;

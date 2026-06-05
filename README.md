@@ -35,7 +35,11 @@ Write the summary the same way at the bottom:
 
 Use a standard `---` horizontal rule to separate multiple Cornell sections in one file.
 
-Other callout types (`note`, `warning`, `info`, etc.) are ignored by the plugin and render as normal Obsidian callouts.
+Anything you write under a cue — paragraphs, lists, tables, embedded images, code blocks, and even other callouts (`note`, `tip`, `warning`, …) — sits in the notes column and shares one continuous divider line, so the whole block reads as belonging to that cue. Only headings, the `---` rule, and the `summary` span the full page width.
+
+### Faster cues
+
+You can always type `> [!cue]` by hand. To speed it up, set a **Cue shortcut** in the settings (see below): type that word on its own line inside a Cornell note and it auto-expands into `> [!cue] ` with the cursor placed right after, ready for the cue text.
 
 ## Settings
 
@@ -46,6 +50,7 @@ Settings → Community Plugins → Cornell Notes:
 | Cue column width | `120` (px) | Width of the left margin column. |
 | Divider line color | `lightgrey` | Any CSS color value (named, hex, rgb). |
 | Divider line thickness | `1` (px) | Set to `0` to hide the divider. |
+| Cue shortcut | `` (empty) | A trigger word that auto-expands into `> [!cue] ` when typed on its own line. Empty disables it. |
 
 Changes apply live — no plugin reload required.
 

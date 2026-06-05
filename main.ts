@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { classifySection, hasCornellCssClass } from "./classifier";
 import {
   buildCornellEditorExtension,
+  buildCueExpander,
   cornellRefreshEffect,
 } from "./livePreview";
 import {
@@ -77,9 +78,13 @@ export default class CornellNotesPlugin extends Plugin {
       () => this.createCornellNote()
     );
 
-    this.registerEditorExtension(
-      buildCornellEditorExtension({ app: this.app })
-    );
+    this.registerEditorExtension([
+      buildCornellEditorExtension({ app: this.app }),
+      buildCueExpander({
+        app: this.app,
+        getTrigger: () => this.settings.cueShortcut,
+      }),
+    ]);
 
     this.registerMarkdownPostProcessor(async (el, ctx) => {
       const file = this.app.vault.getAbstractFileByPath(ctx.sourcePath);

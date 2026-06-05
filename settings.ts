@@ -5,12 +5,17 @@ export interface CornellSettings {
   cueWidth: number;
   dividerColor: string;
   dividerThickness: number;
+  /** A trigger word the user types on its own line in a Cornell note; it
+   *  auto-expands into `> [!cue] `. Empty disables the shortcut — the user can
+   *  always still type `> [!cue]` by hand. */
+  cueShortcut: string;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
   cueWidth: 120,
   dividerColor: "lightgrey",
   dividerThickness: 1,
+  cueShortcut: "",
 };
 
 export class CornellSettingsTab extends PluginSettingTab {
@@ -70,6 +75,21 @@ export class CornellSettingsTab extends PluginSettingTab {
               this.plugin.settings.dividerThickness = n;
               await this.plugin.saveSettings();
             }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Cue shortcut")
+      .setDesc(
+        "Type this word on its own line in a Cornell note and it auto-expands into '> [!cue] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!cue]' by hand). Example: cc"
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("e.g. cc")
+          .setValue(this.plugin.settings.cueShortcut)
+          .onChange(async (value) => {
+            this.plugin.settings.cueShortcut = value.trim();
+            await this.plugin.saveSettings();
           })
       );
   }

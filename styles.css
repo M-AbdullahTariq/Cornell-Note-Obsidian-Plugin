@@ -16,6 +16,38 @@
 }
 
 /* =====================================================================
+ * Suppress Obsidian's native blockquote bar
+ *
+ * Cues and summaries are written as blockquote callouts (`> [!cue]`), and
+ * while the user is mid-typing `> ...` Obsidian draws its own accent-colored
+ * (often purple) blockquote stripe on every `>` line. That stripe collides
+ * with the plugin's own grey divider and reads as a stray colored line. The
+ * cue/summary themselves render as callouts (their own chrome), so the native
+ * blockquote bar adds nothing here — blank it out across the whole Cornell
+ * note in both views. The divider line below is unaffected (it is drawn by
+ * our own `border-left`, not by `--blockquote-border-color`).
+ * ===================================================================== */
+
+.cornell-note {
+  --blockquote-border-color: transparent;
+  --blockquote-border-thickness: 0px;
+}
+
+/* Live Preview draws the bar as a left border on the quote line itself;
+ * the variable above is not always honored there, so blank it directly. */
+.cornell-note .cm-line.HyperMD-quote {
+  border-left-color: transparent !important;
+}
+
+/* Reading view renders a real <blockquote>; kill its inline-start border too.
+ * Kept as a bare descendant so it matches whether `.cornell-note` lands on the
+ * preview container itself or on an ancestor. Cues/summaries are `.callout`
+ * elements, not <blockquote>, so they are untouched. */
+.cornell-note blockquote {
+  border-inline-start-color: transparent;
+}
+
+/* =====================================================================
  * Shared cue / summary callout styling (Reading view + Live Preview)
  *
  * Cue text auto-wraps to as many lines as needed. The cue grows taller
@@ -125,6 +157,14 @@
   display: grid;
   grid-template-columns: var(--cue-width) var(--cue-gap) 1fr;
   align-items: start;
+  /* CRITICAL: Obsidian sets a large inline `min-height` on the sizer to
+   * reserve scroll space — often far taller than the content. A grid's
+   * default `align-content` is `stretch`, which would distribute that surplus
+   * height across the rows, exploding each row to thousands of px and
+   * scattering the blocks until the page looks blank. `start` packs rows at
+   * their natural height from the top; the reserved height becomes ordinary
+   * empty space below. Do not remove. */
+  align-content: start;
   /* Default block flow gives wrappers some vertical margin; preserve that
    * by letting row-gap stay 0 and relying on the wrappers' own margins. */
   row-gap: 0;
@@ -180,8 +220,21 @@
   margin-bottom: var(--cue-gap);
 }
 
-/* `summary` and `full` slots span the full width via the default `> *` rule
- * above — no explicit placement needed. */
+/* Summary → notes column WITH the divider, not full-width. Placing it in
+ * column 3 (like a body block) leaves the cue column empty beside it, so the
+ * vertical cue|notes divider line continues straight down through the summary
+ * instead of stopping at the last note. `align-self: stretch` keeps the border
+ * spanning the whole row, matching the body divider exactly. */
+.cornell-note .markdown-preview-sizer > [data-cornell-slot="summary"] {
+  grid-column: 3;
+  align-self: stretch;
+  border-left: var(--cue-line);
+  padding-left: 15px;
+  margin: 0;
+}
+
+/* `full` slots (headings, the `---` rule, frontmatter) still span the full
+ * width via the default `> *` rule above — no explicit placement needed. */
 
 /* =====================================================================
  * Live Preview (CodeMirror 6) layout
@@ -222,17 +275,26 @@
   padding-left: 15px;
 }
 
-/* Rendered table widget (cursor outside the table) sits in its own
- * `.cm-embed-block`, which is not a `.cm-line` and therefore misses the
- * line-decoration above. Give it the same border-left + padding so the
- * embed widget matches Reading view and source-mode editing.
+/* Rendered block widgets (cursor outside them) sit in their own
+ * `.cm-embed-block`, which is NOT a `.cm-line`, so they miss the per-line
+ * divider above. Tables, embedded images (`![[img]]`), note/tip callouts and
+ * any other widget block under a cue all need the same border-left + padding
+ * so the divider reads as one continuous block line — matching Reading view.
  *
- * The `> table` direct-child clause keeps this from hitting cue or
- * summary embed-blocks (those have `.callout` as their direct child,
- * not `<table>`). */
-.cornell-note .cm-embed-block:has(> table) {
+ * The two `:not(:has(...))` clauses exclude the cue and summary embed-blocks:
+ * cues live in the left margin (no divider) and the summary is stripped to
+ * plain prose. Everything else (table / image / admonition) gets the line. */
+.cornell-note
+  .cm-embed-block:not(:has(.callout[data-callout="cue"])):not(
+    :has(.callout[data-callout="summary"])
+  ) {
   border-left: var(--cue-line);
   padding-left: 15px;
+  /* Obsidian gives embed-blocks their own horizontal margin, which would push
+   * their border-left to a different x than the text lines' border (`.cm-line`
+   * sits flush against the content padding). Zero it so every divider segment —
+   * paragraph, table, image — lines up on the same vertical. */
+  margin-left: 0;
 }
 
 /* Blank source lines between a cue and its anchor body block: collapse
@@ -325,11 +387,14 @@
 /* Strip the CM6 embed-block chrome around the rendered summary so it
  * reads as plain prose, matching the shared inner-callout stripping. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
-  padding: 0 !important;
+  padding: 0 0 0 15px !important;
   margin: 0 !important;
   contain: none !important;
   background: transparent !important;
   border: none !important;
+  /* Keep the left divider so the summary reads as part of the notes column,
+   * matching Reading view and the source-mode summary line above. */
+  border-left: var(--cue-line) !important;
   box-shadow: none !important;
 }
 
@@ -343,7 +408,10 @@
 }
 
 /* Source-mode summary line (cursor inside, raw `> [!summary]` text
- * visible). Stays in the body column as plain prose. */
+ * visible). Stays in the body column as plain prose, and now carries the same
+ * divider line as the notes above it (matching Reading view's summary). */
 .cornell-note .cm-line.cornell-summary-line {
   font-style: normal;
+  border-left: var(--cue-line);
+  padding-left: 15px;
 }
