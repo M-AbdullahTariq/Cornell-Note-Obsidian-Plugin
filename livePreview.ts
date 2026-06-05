@@ -11,6 +11,7 @@ import { classifyBlocks, hasCornellCssClass } from "./classifier";
 
 const CUE_LINE_CLASS = "cornell-cue-line";
 const SUMMARY_LINE_CLASS = "cornell-summary-line";
+const SUMMARY_START_CLASS = "cornell-summary-start";
 const TITLE_LINE_CLASS = "cornell-title-line";
 const BODY_LINE_CLASS = "cornell-body-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
@@ -109,6 +110,17 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
               const line = view.state.doc.line(n);
               ranges.push(Decoration.line({ class: cls }).range(line.from));
             }
+            // Summary only: also tag the FIRST line so the full-width top rule
+            // (the notes/summary separator) draws exactly once, not between
+            // every summary line. The first line carries both classes.
+            if (slot.role === "summary") {
+              const firstLine = view.state.doc.line(startLineNum);
+              ranges.push(
+                Decoration.line({ class: SUMMARY_START_CLASS }).range(
+                  firstLine.from
+                )
+              );
+            }
           } else if (slot.role === "body") {
             for (const r of slot.lineRanges) {
               ranges.push(
@@ -150,18 +162,43 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
   );
 }
 
-export interface CueExpanderContext {
-  app: App;
-  /** Read live so a settings change takes effect without reload. */
-  getTrigger: () => string;
+/** One auto-expansion rule: when a line's entire text equals `trigger`, replace
+ *  the line with `insert` (the cursor lands at its end). An empty `trigger`
+ *  disables the rule. */
+export interface ExpansionRule {
+  trigger: string;
+  insert: string;
 }
 
-/** Auto-expand a configurable trigger word into a cue. When the user types the
- *  trigger so that a line's entire text equals it (e.g. the line becomes `cc`)
- *  inside a Cornell note, replace that line with `> [!cue] ` and move the
- *  cursor to the end. Anchoring on whole-line equality keeps it from firing on
- *  the trigger word mid-sentence — a cue is always its own `>` line anyway. */
-export function buildCueExpander(ctx: CueExpanderContext) {
+/** Pure trigger-matching core (no CodeMirror / Obsidian deps, unit-testable in
+ *  isolation). Returns the `insert` of the FIRST rule whose non-empty trigger
+ *  equals the line exactly, or null when none match. "First wins" is the
+ *  collision rule: if two rules share a trigger, the earlier one (cue, by the
+ *  order main.ts supplies them) takes it. Matching is whole-line equality —
+ *  the line must BE the trigger, so it never fires on the word mid-sentence
+ *  (a callout is always its own line anyway). */
+export function resolveExpansion(
+  lineText: string,
+  rules: ExpansionRule[]
+): string | null {
+  for (const rule of rules) {
+    if (rule.trigger && lineText === rule.trigger) return rule.insert;
+  }
+  return null;
+}
+
+export interface CalloutExpanderContext {
+  app: App;
+  /** Read live so a settings change takes effect without reload. Rules are
+   *  ordered; earlier rules win on identical triggers (see resolveExpansion). */
+  getRules: () => ExpansionRule[];
+}
+
+/** Auto-expand a configurable trigger word into a callout (cue / summary).
+ *  Thin CodeMirror shell around the pure `resolveExpansion`: it reads the
+ *  editor state, asks the resolver which (if any) expansion applies to the
+ *  just-typed line, and dispatches the replacement. */
+export function buildCalloutExpander(ctx: CalloutExpanderContext) {
   return ViewPlugin.fromClass(
     class {
       constructor(_view: EditorView) {}
@@ -169,8 +206,9 @@ export function buildCueExpander(ctx: CueExpanderContext) {
       update(update: ViewUpdate) {
         if (!update.docChanged) return;
 
-        const trigger = ctx.getTrigger().trim();
-        if (!trigger) return;
+        const rules = ctx.getRules();
+        // Cheap exit when nothing is configured (all triggers blank).
+        if (!rules.some((r) => r.trigger)) return;
 
         const view = update.view;
         const file = findFileForEditor(view, ctx.app);
@@ -181,17 +219,19 @@ export function buildCueExpander(ctx: CueExpanderContext) {
         const sel = view.state.selection.main;
         if (!sel.empty) return;
         const line = view.state.doc.lineAt(sel.head);
-        if (sel.head !== line.to || line.text !== trigger) return;
+        if (sel.head !== line.to) return;
+        const insert = resolveExpansion(line.text, rules);
+        if (insert === null) return;
 
         // Dispatching during an update is illegal in CodeMirror, so defer to a
-        // microtask. Re-validate against the (possibly changed) current state
-        // before committing the replacement.
+        // microtask. Re-validate against the (possibly changed) current state —
+        // the line must still be the trigger we matched — before committing.
         const from = line.from;
+        const expected = line.text;
         queueMicrotask(() => {
           if (from > view.state.doc.length) return;
           const ln = view.state.doc.lineAt(from);
-          if (ln.from !== from || ln.text !== trigger) return;
-          const insert = "> [!cue] ";
+          if (ln.from !== from || ln.text !== expected) return;
           view.dispatch({
             changes: { from: ln.from, to: ln.to, insert },
             selection: { anchor: ln.from + insert.length },

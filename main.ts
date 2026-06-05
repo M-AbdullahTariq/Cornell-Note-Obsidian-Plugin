@@ -7,7 +7,7 @@ import {
 } from "./classifier";
 import {
   buildCornellEditorExtension,
-  buildCueExpander,
+  buildCalloutExpander,
   cornellRefreshEffect,
 } from "./livePreview";
 import {
@@ -42,10 +42,6 @@ Body notes for topic 1 go here. Write freely — paragraphs, lists, code, anythi
 ## Topic 3
 
 More notes...
-
----
-
-# Summary
 
 > [!summary]
 > Write your summary here.
@@ -84,9 +80,17 @@ export default class CornellNotesPlugin extends Plugin {
 
     this.registerEditorExtension([
       buildCornellEditorExtension({ app: this.app }),
-      buildCueExpander({
+      buildCalloutExpander({
         app: this.app,
-        getTrigger: () => this.settings.cueShortcut,
+        // Ordered rules; earlier wins on identical triggers. Cue is listed
+        // first, so if the user sets the same word for both, the cue takes it.
+        getRules: () => [
+          { trigger: this.settings.cueShortcut.trim(), insert: "> [!cue] " },
+          {
+            trigger: this.settings.summaryShortcut.trim(),
+            insert: "> [!summary] ",
+          },
+        ],
       }),
     ]);
 

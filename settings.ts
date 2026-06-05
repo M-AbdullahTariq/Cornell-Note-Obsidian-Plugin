@@ -9,6 +9,10 @@ export interface CornellSettings {
    *  auto-expands into `> [!cue] `. Empty disables the shortcut — the user can
    *  always still type `> [!cue]` by hand. */
   cueShortcut: string;
+  /** A trigger word the user types on its own line in a Cornell note; it
+   *  auto-expands into `> [!summary] `. Empty disables the shortcut — the user
+   *  can always still type `> [!summary]` by hand. Mirrors `cueShortcut`. */
+  summaryShortcut: string;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
@@ -16,6 +20,7 @@ export const DEFAULT_SETTINGS: CornellSettings = {
   dividerColor: "lightgrey",
   dividerThickness: 1,
   cueShortcut: "",
+  summaryShortcut: "",
 };
 
 export class CornellSettingsTab extends PluginSettingTab {
@@ -89,6 +94,21 @@ export class CornellSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.cueShortcut)
           .onChange(async (value) => {
             this.plugin.settings.cueShortcut = value.trim();
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Summary shortcut")
+      .setDesc(
+        "Type this word on its own line in a Cornell note and it auto-expands into '> [!summary] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!summary]' by hand). If set to the same word as the cue shortcut, the cue wins. Example: ss"
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("e.g. ss")
+          .setValue(this.plugin.settings.summaryShortcut)
+          .onChange(async (value) => {
+            this.plugin.settings.summaryShortcut = value.trim();
             await this.plugin.saveSettings();
           })
       );

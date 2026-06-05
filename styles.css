@@ -114,7 +114,12 @@
   white-space: normal;
 }
 
-/* Summary callout: strip all chrome so it renders as plain body text. */
+/* Summary callout: strip the box chrome (background, border, shadow) but —
+ * unlike before — KEEP a visible section label so the summary is unmistakable.
+ * The title shows whatever the user types after `[!summary]`, falling back to
+ * Obsidian's native default ("Summary") when none is given, so "typed title,
+ * else Summary" needs no extra plumbing. The full-width separator rule above
+ * the summary is added separately (Phase 2). */
 .cornell-note .callout[data-callout="summary"] {
   background: transparent;
   border: none;
@@ -125,8 +130,30 @@
   mix-blend-mode: normal;
 }
 
-.cornell-note .callout[data-callout="summary"] .callout-title {
+/* Hide the admonition icon so the title reads as a plain section label, not a
+ * boxed callout (matches how the cue and title callouts drop their icons). */
+.cornell-note .callout[data-callout="summary"] .callout-icon {
   display: none;
+}
+
+/* Show the title as a heading-style label (was `display: none`). Reset
+ * Obsidian's default flex title to `block` so it sits as a simple label line
+ * above the summary prose. */
+.cornell-note .callout[data-callout="summary"] .callout-title {
+  display: block;
+  padding: 0;
+  margin: 0 0 4px 0;
+  background: transparent;
+  gap: 0;
+}
+
+.cornell-note .callout[data-callout="summary"] .callout-title-inner {
+  font-family: var(--font-text);
+  font-size: var(--h4-size, 1.1em);
+  font-weight: 700;
+  line-height: var(--line-height);
+  color: var(--text-normal);
+  white-space: normal;
 }
 
 .cornell-note .callout[data-callout="summary"] .callout-content,
@@ -277,8 +304,19 @@
 /* Summary → full-width band across BOTH columns at the bottom of its page,
  * like the classic Cornell sheet. It spans every grid track via the default
  * `> *` rule above (grid-column: 1 / -1), so no explicit placement is needed —
- * and no cue|notes divider runs through it. `summary` and the `full` slots
- * (headings, the `---` rule, frontmatter) all use that default. */
+ * and no cue|notes (vertical) divider runs through it. `summary` and the `full`
+ * slots (headings, the `---` rule, frontmatter) all use that default.
+ *
+ * A full-width HORIZONTAL rule is drawn on top of the summary wrapper — the
+ * classic notes/summary separator — so the section is unmistakable without a
+ * manual `---`. It reuses the divider's color/thickness (`--cue-line`), so
+ * setting divider thickness to 0 hides this rule too (consistent: "no lines").
+ * `--cue-gap` above and below the rule gives the band breathing room. */
+.cornell-note .markdown-preview-sizer > [data-cornell-slot="summary"] {
+  border-top: var(--cue-line);
+  margin-top: var(--cue-gap);
+  padding-top: var(--cue-gap);
+}
 
 /* Page-break gap: every title wrapper preceded by an earlier title (i.e. the
  * 2nd page onward) gets a large top margin, so stacked pages read as separate
@@ -348,8 +386,14 @@
   /* Obsidian gives embed-blocks their own horizontal margin, which would push
    * their border-left to a different x than the text lines' border (`.cm-line`
    * sits flush against the content padding). Zero it so every divider segment —
-   * paragraph, table, image — lines up on the same vertical. */
-  margin-left: 0;
+   * paragraph, table, image — lines up on the same vertical. `!important` is
+   * required because Obsidian declares a negative `margin-left` on table
+   * widgets (`.cm-table-widget`, ~-16px, to align cell text with body text)
+   * with `!important` of its own; without it the table divider sits ~16px left
+   * of the paragraph-line dividers. (Confirmed by DOM probe: body line at x488,
+   * table at x472 with margin-left:-16px; padding-left:15px from this rule did
+   * apply, proving the selector matches and only the margin was being lost.) */
+  margin-left: 0 !important;
 }
 
 /* Table cell editing — stop the outer cue-column layout leaking into cells.
@@ -463,14 +507,20 @@
   cursor: help;
 }
 
-/* Strip the CM6 embed-block chrome around the rendered summary so it
- * reads as plain prose, matching the shared inner-callout stripping. */
+/* Strip the CM6 embed-block chrome around the rendered summary so it reads as
+ * plain prose — EXCEPT the top edge, which carries the full-width notes/summary
+ * separator rule (Phase 2), matching the Reading-view summary wrapper. Only the
+ * top border is reintroduced (left/right/bottom stay stripped); `border-top`
+ * comes after `border: none` so the longhand wins the !important tie. The
+ * top margin/padding (`--cue-gap`) gives the band the same breathing room as
+ * Reading view. */
 .cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
-  padding: 0 !important;
-  margin: 0 !important;
+  padding: var(--cue-gap) 0 0 0 !important;
+  margin: var(--cue-gap) 0 0 0 !important;
   contain: none !important;
   background: transparent !important;
   border: none !important;
+  border-top: var(--cue-line) !important;
   box-shadow: none !important;
 }
 
@@ -502,6 +552,16 @@
  * full-width summary band in Reading view. */
 .cornell-note .cm-line.cornell-summary-line {
   font-style: normal;
+}
+
+/* First source line of a summary: carries the full-width top rule so the
+ * separator stays visible while editing inside the block, matching the rendered
+ * embed-block and Reading view. livePreview.ts tags ONLY the first line with
+ * this class (the rest keep `cornell-summary-line`), so the rule draws once. */
+.cornell-note .cm-line.cornell-summary-start {
+  border-top: var(--cue-line);
+  margin-top: var(--cue-gap);
+  padding-top: var(--cue-gap);
 }
 
 /* Source-mode title line (raw `> [!title]` text visible). Pull it out of the
