@@ -352,6 +352,30 @@
   margin-left: 0;
 }
 
+/* Table cell editing — stop the outer cue-column layout leaking into cells.
+ *
+ * In Live Preview each editable table cell is its OWN nested CodeMirror editor
+ * (`.cm-table-widget ... .cm-editor > .cm-scroller > .cm-content`). Because the
+ * nested editor sits under the same `.cornell-note` ancestor, the outer-editor
+ * rules below match it too:
+ *   - `.cm-content { padding-left: var(--cue-column-offset) }` indented the
+ *     cell's text by 140px the moment the cursor entered it, and
+ *   - the cue/body line decorations drew a stray divider and padding inside it.
+ * Both appeared only while editing a cell and vanished on click-out — the
+ * reported "space indentation when editing, fixed when I click outside" bug.
+ * Reset the nested editor back to plain so a focused cell behaves like a normal
+ * cell. (Confirmed by DOM probe: the cell's nested `.cm-content` carried the
+ * 140px padding and its line carried our divider.) */
+.cornell-note .cm-table-widget .cm-content {
+  padding-left: 0 !important;
+}
+
+.cornell-note .cm-table-widget .cm-line {
+  border-left: none !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
 /* Blank source lines between a cue and its anchor body block: collapse
  * them so the cue's embed-block (at min-height: 0 below) lands on the
  * same row as the anchor. The active-line override restores full height
