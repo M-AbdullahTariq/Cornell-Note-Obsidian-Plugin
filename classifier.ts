@@ -298,11 +298,13 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
  *
  *  - A cue is never blurred but carries its group key, since clicking it is what
  *    reveals the region.
- *  - Body blocks and in-region headings owned by a cue blur and share that cue's
- *    group key, so they reveal together when the cue is clicked.
+ *  - Body blocks owned by a cue blur and share that cue's group key, so they
+ *    reveal together when the cue is clicked.
  *  - A summary blurs and is its own reveal target (keyed per page).
- *  - Titles, horizontal rules, frontmatter, gaps, and orphan content (no owning
- *    cue) are never blurred and carry no group key.
+ *  - Headings stay visible: a heading inside a cue's region (e.g. `## Topic`)
+ *    reads as a prompt alongside the cue, not an answer to hide. Titles,
+ *    horizontal rules, frontmatter, gaps, and orphan content (no owning cue)
+ *    are likewise never blurred and carry no group key.
  *
  *  `group` is the single source of truth for what the DOM controller stamps as
  *  `data-cornell-cue-group`; `blur` drives the blur marker. */
@@ -315,9 +317,8 @@ export function reviewBlurInfo(
   if (slot.role === "cue" && slot.cueGroup != null) {
     return { blur: false, group: `cue:${slot.cueGroup}` };
   }
-  if (slot.cueGroup != null) {
-    const isBlurrable = slot.role === "body" || (slot.role === "full" && !!slot.isHeading);
-    if (isBlurrable) return { blur: true, group: `cue:${slot.cueGroup}` };
+  if (slot.cueGroup != null && slot.role === "body") {
+    return { blur: true, group: `cue:${slot.cueGroup}` };
   }
   return { blur: false, group: null };
 }

@@ -17,6 +17,10 @@ export interface CornellSettings {
    *  auto-expands into `> [!title] `. Empty disables the shortcut — the user
    *  can always still type `> [!title]` by hand. Mirrors `cueShortcut`. */
   titleShortcut: string;
+  /** Review mode only: when true, hovering a cue (or the summary) draws a
+   *  colored box around it to signal it's clickable. Off by default — the
+   *  pointer cursor is the only affordance unless the user opts in. */
+  reviewHoverHighlight: boolean;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
@@ -26,6 +30,7 @@ export const DEFAULT_SETTINGS: CornellSettings = {
   cueShortcut: "",
   summaryShortcut: "",
   titleShortcut: "",
+  reviewHoverHighlight: false,
 };
 
 /** The three shortcut trigger words, keyed by callout kind. */
@@ -107,6 +112,20 @@ export class CornellSettingsTab extends PluginSettingTab {
               this.plugin.settings.dividerThickness = n;
               await this.plugin.saveSettings();
             }
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Highlight cue on hover (review mode)")
+      .setDesc(
+        "In review mode, draw a colored box around a cue (and the summary) when you hover it, marking it as clickable. Off by default — the cursor still changes to a pointer either way."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.reviewHoverHighlight)
+          .onChange(async (value) => {
+            this.plugin.settings.reviewHoverHighlight = value;
+            await this.plugin.saveSettings();
           })
       );
 

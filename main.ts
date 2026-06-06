@@ -23,6 +23,7 @@ const _sig = "VGhpcyBJcyBCZWFzdEh1bnRlcnMgQ29kZQ==";
 const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
+const CLASS_REVIEW_HOVER_BOX = "cornell-review-hover-box";
 const INVALID_TOOLTIP =
   "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
@@ -228,6 +229,7 @@ export default class CornellNotesPlugin extends Plugin {
     r.style.removeProperty(CSS_VAR_CUE_WIDTH);
     r.style.removeProperty(CSS_VAR_LINE_COLOR);
     r.style.removeProperty(CSS_VAR_LINE_THICKNESS);
+    r.classList.remove(CLASS_REVIEW_HOVER_BOX);
   }
 
   async loadSettings() {
@@ -247,6 +249,12 @@ export default class CornellNotesPlugin extends Plugin {
     r.style.setProperty(
       CSS_VAR_LINE_THICKNESS,
       `${this.settings.dividerThickness}px`
+    );
+    // Opt-in review-mode hover highlight: a root class gates the box-shadow
+    // rule in the stylesheet, so toggling the setting applies it live.
+    r.classList.toggle(
+      CLASS_REVIEW_HOVER_BOX,
+      this.settings.reviewHoverHighlight
     );
   }
 

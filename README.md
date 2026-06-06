@@ -76,7 +76,7 @@ The three trigger words must be **distinct** — if you set the same word for tw
 Review mode turns a Cornell note into an active-recall study sheet. Run the **"Toggle review mode"** command: cue titles (and the page title) stay visible as prompts, while each cue's notes region and the summary are **blurred**. Read a cue, try to recall its notes, then **click the cue to reveal them** (click again to re-hide). Reveals accumulate, so you can open several at once; **click the summary** to reveal/hide it on its own.
 
 - Review mode is **global** (it affects every open Cornell note) and works in **Reading view** only — switch to Reading view to use it.
-- A cue's whole region reveals together, including any full-width heading inside it. The page title, the cue callouts themselves, horizontal rules, and any content before the first cue stay visible.
+- Clicking a cue reveals all the body notes in its region together. Full-width headings stay visible (they read as prompts alongside the cue), as do the page title, the cue callouts themselves, the summary title, horizontal rules, and any content before the first cue.
 - Run **"Reset review reveals (re-blur all)"** to re-hide everything and start the recall over without leaving review mode. Toggling review mode off also clears all reveals.
 
 ## Settings
@@ -91,6 +91,7 @@ Settings → Community Plugins → Cornell Notes:
 | Cue shortcut | `` (empty) | A trigger word that auto-expands into `> [!cue] ` when typed on its own line. Empty disables it. |
 | Summary shortcut | `` (empty) | A trigger word that auto-expands into `> [!summary] `. Empty disables it. |
 | Title shortcut | `` (empty) | A trigger word that auto-expands into `> [!title] `. Empty disables it. |
+| Highlight cue on hover (review mode) | `off` | When on, hovering a cue (or the summary) in review mode draws an accent box around it. The pointer cursor shows either way. |
 
 The three shortcut trigger words must differ from one another; the settings reject a duplicate with an error. Changes apply live — no plugin reload required.
 

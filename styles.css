@@ -347,13 +347,14 @@
 }
 
 /* What blurs in each blurrable wrapper:
- *  - body / heading wrappers: their whole content (`> *`).
+ *  - body wrappers: their whole content (`> *`).
  *  - summary wrapper: ONLY the callout body (`.callout-content`). The summary
  *    title — "Summary" or a custom one like "Key Take Away" — stays visible as
  *    a prompt, exactly like a cue title.
- * The blur always lands on content, never the wrapper, so the cue|notes divider
- * and the notes/summary separator (borders ON the wrapper) stay crisp. The
- * sharp / revealed state is the default; the reveal is the smooth path. */
+ * Cues, headings, the page title, and rules are never blurred. The blur always
+ * lands on content, never the wrapper, so the cue|notes divider and the
+ * notes/summary separator (borders ON the wrapper) stay crisp. The sharp /
+ * revealed state is the default; the reveal is the smooth path. */
 .cornell-note
   .markdown-preview-sizer.cornell-review
   > [data-cornell-review-blur]:not([data-cornell-slot="summary"])
@@ -380,8 +381,8 @@
   .markdown-preview-sizer.cornell-review
   > [data-cornell-slot="summary"][data-cornell-review-blur]:not([data-cornell-revealed])
   .callout-content {
-  filter: blur(6px);
-  opacity: 0.55;
+  filter: blur(8px);
+  opacity: 0.6;
   user-select: none;
   transition: filter 140ms var(--cornell-ease-out),
     opacity 140ms var(--cornell-ease-out);
@@ -402,9 +403,8 @@
   }
 }
 
-/* Reveal triggers — cues and the summary are clickable in review mode. The
- * pointer cursor and a subtle accent outline on hover signal "click to
- * reveal" (and, once revealed, "click to hide again"). */
+/* Reveal triggers — cues and the summary are clickable in review mode. A
+ * pointer cursor is always shown. */
 .cornell-note .markdown-preview-sizer.cornell-review > [data-cornell-slot="cue"],
 .cornell-note
   .markdown-preview-sizer.cornell-review
@@ -412,11 +412,17 @@
   cursor: pointer;
 }
 
-.cornell-note
+/* Optional hover highlight (off by default): the plugin adds the
+ * `cornell-review-hover-box` class on the document root when the
+ * "Highlight cue on hover" setting is enabled. Only then is an accent box drawn
+ * around a hovered cue / summary callout. */
+.cornell-review-hover-box
+  .cornell-note
   .markdown-preview-sizer.cornell-review
   > [data-cornell-slot="cue"]:hover
   .callout,
-.cornell-note
+.cornell-review-hover-box
+  .cornell-note
   .markdown-preview-sizer.cornell-review
   > [data-cornell-slot="summary"]:hover
   .callout {
