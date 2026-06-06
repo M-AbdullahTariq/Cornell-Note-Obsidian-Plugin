@@ -7,7 +7,12 @@ import {
 } from "@codemirror/view";
 import { Range, StateEffect } from "@codemirror/state";
 import { App, MarkdownView, TFile } from "obsidian";
-import { classifyBlocks, hasCornellCssClass } from "./classifier";
+import {
+  classifyBlocks,
+  hasCornellCssClass,
+  invalidTooltip,
+  type Slot,
+} from "./classifier";
 
 const CUE_LINE_CLASS = "cornell-cue-line";
 const SUMMARY_LINE_CLASS = "cornell-summary-line";
@@ -16,8 +21,6 @@ const TITLE_LINE_CLASS = "cornell-title-line";
 const BODY_LINE_CLASS = "cornell-body-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
-const INVALID_TOOLTIP =
-  "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
 export const cornellRefreshEffect = StateEffect.define<void>();
 
@@ -146,11 +149,11 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         // Apply `.cornell-invalid` to rendered cue callouts whose slot is
         // flagged. Done on the next animation frame because the embed-block
         // DOM is populated asynchronously by Obsidian's callout renderer.
-        const invalidFlags = slots
+        const invalidReasons = slots
           .filter((s) => s.role === "cue")
-          .map((s) => s.invalid === "adjacent-cue");
+          .map((s) => s.invalid ?? null);
         window.requestAnimationFrame(() => {
-          markInvalidCueCallouts(view, invalidFlags);
+          markInvalidCueCallouts(view, invalidReasons);
         });
 
         return Decoration.set(ranges, true);
@@ -242,15 +245,18 @@ export function buildCalloutExpander(ctx: CalloutExpanderContext) {
   );
 }
 
-function markInvalidCueCallouts(view: EditorView, flags: boolean[]): void {
+function markInvalidCueCallouts(
+  view: EditorView,
+  reasons: (Slot["invalid"] | null)[]
+): void {
   const cueEls = view.dom.querySelectorAll<HTMLElement>(
     '.callout[data-callout="cue"]'
   );
   cueEls.forEach((el, idx) => {
-    const invalid = !!flags[idx];
-    el.classList.toggle(INVALID_CALLOUT_CLASS, invalid);
-    if (invalid) {
-      el.setAttribute("title", INVALID_TOOLTIP);
+    const reason = reasons[idx] ?? null;
+    el.classList.toggle(INVALID_CALLOUT_CLASS, reason !== null);
+    if (reason) {
+      el.setAttribute("title", invalidTooltip(reason));
     } else {
       el.removeAttribute("title");
     }

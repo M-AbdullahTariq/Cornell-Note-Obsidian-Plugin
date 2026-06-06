@@ -26,6 +26,22 @@ Write cues as callouts before the heading or block they describe:
 The Cornell method offers a specific layout for each page of notes.
 ```
 
+> [!important] Leave a blank line between a cue and a paragraph beneath it.
+> Markdown "lazy continuation" folds a paragraph that sits *directly* under a
+> `> [!cue]` line **into** the cue callout — the notes then render inside the
+> narrow cue column (and overlap in Live Preview) instead of the notes column.
+> A heading or list right below a cue is fine (those break out on their own); a
+> bare paragraph needs the blank line:
+>
+> ```markdown
+> > [!cue] Topic
+>
+> Notes for this cue go here.
+> ```
+>
+> The plugin flags a cue that has swallowed its notes this way with a red
+> warning border and a tooltip reminding you to add the blank line.
+
 Write the summary the same way at the bottom. It renders as a full-width band across **both** the cue and notes columns, like a classic Cornell sheet:
 
 ```markdown

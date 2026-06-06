@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import {
   classifySection,
   hasCornellCssClass,
+  invalidTooltip,
   leadsWithTitle,
   reviewBlurInfo,
 } from "./classifier";
@@ -24,8 +25,6 @@ const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
 const CLASS_REVIEW_HOVER_BOX = "cornell-review-hover-box";
-const INVALID_TOOLTIP =
-  "Cue has no body block before the next cue. Add content below, or merge the cues.";
 
 const CORNELL_TEMPLATE = `---
 cssclasses:
@@ -199,17 +198,17 @@ export default class CornellNotesPlugin extends Plugin {
         wrapper.removeAttribute("data-cornell-notes-end");
       }
 
-      // Mark this section's cue invalid (adjacent-cue) directly — no whole-
-      // preview index matching.
+      // Mark this section's cue invalid (adjacent-cue / lazy-body) directly —
+      // no whole-preview index matching.
       if (slot.role === "cue") {
         const cueEl = el.querySelector<HTMLElement>(
           '.callout[data-callout="cue"]'
         );
         if (cueEl) {
-          const invalid = slot.invalid === "adjacent-cue";
-          cueEl.classList.toggle("cornell-invalid", invalid);
-          if (invalid) {
-            cueEl.setAttribute("title", INVALID_TOOLTIP);
+          const reason = slot.invalid ?? null;
+          cueEl.classList.toggle("cornell-invalid", reason !== null);
+          if (reason) {
+            cueEl.setAttribute("title", invalidTooltip(reason));
           } else {
             cueEl.removeAttribute("title");
           }

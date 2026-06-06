@@ -284,3 +284,43 @@ body
   const cue = classifyBlocks(md, FM).find((s) => s.role === "cue");
   assert.equal(cue?.invalid, undefined);
 });
+
+test("a paragraph glued to a cue (no blank line) is flagged lazy-body", () => {
+  // Markdown lazy continuation folds this paragraph into the cue callout.
+  const md = `> [!cue] Topic
+Notes glued directly under the cue.
+
+> [!summary]
+> Wrap up.
+`;
+  const cue = classifyBlocks(md, FM).find((s) => s.role === "cue");
+  assert.equal(cue?.invalid, "lazy-body");
+});
+
+test("a blank line between a cue and its paragraph clears lazy-body", () => {
+  const md = `> [!cue] Topic
+
+Notes separated by a blank line.
+`;
+  const cue = classifyBlocks(md, FM).find((s) => s.role === "cue");
+  assert.equal(cue?.invalid, undefined);
+});
+
+test("a list or table glued to a cue is not lazy-body (it breaks out of the callout)", () => {
+  const list = `> [!cue] Topic
+- item one
+- item two
+`;
+  const table = `> [!cue] Topic
+| a | b |
+| - | - |
+`;
+  assert.equal(
+    classifyBlocks(list, FM).find((s) => s.role === "cue")?.invalid,
+    undefined
+  );
+  assert.equal(
+    classifyBlocks(table, FM).find((s) => s.role === "cue")?.invalid,
+    undefined
+  );
+});

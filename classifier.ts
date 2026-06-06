@@ -28,10 +28,14 @@ export interface Slot {
   /** Cue only: char range of the body block this cue anchors to (falls back to
    *  the cue's own range when there is no external body block). */
   anchorBlockRange?: Range | null;
-  /** Cue only: set when this cue is part of an adjacent-cue pair (another cue
-   *  sits directly above/below with only blank lines between — no body block).
-   *  Both cues in the pair receive the flag. */
-  invalid?: "adjacent-cue";
+  /** Cue only: a layout warning.
+   *  - `"adjacent-cue"`: another cue sits directly above/below with only blank
+   *    lines between (no body block). Both cues in the pair receive the flag.
+   *  - `"lazy-body"`: a plain paragraph sits directly under the cue with no
+   *    blank line between, so Markdown lazy continuation folds it INTO the cue
+   *    callout (the notes render in the narrow cue column). The fix is a blank
+   *    line; see `isLazyContinuation`. */
+  invalid?: "adjacent-cue" | "lazy-body";
   /** Body only: true when this body block is the last in its cue's notes
    *  region (the next block is a cue / heading / rule / summary, or there is
    *  none). Reading view uses it to break the continuous divider line before
@@ -123,6 +127,17 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
         ) {
           slot.invalid = "adjacent-cue";
           slots[lastCueSlotIdx].invalid = "adjacent-cue";
+        } else if (
+          j < lns.length &&
+          kinds[j].kind === "body" &&
+          isLazyContinuation(lns[j].text)
+        ) {
+          // The line directly below the cue (no blank line between) is plain
+          // paragraph text. Markdown lazy continuation folds that paragraph
+          // INTO the cue callout, so Obsidian renders the notes inside the
+          // narrow cue column instead of the notes column — and in Live Preview
+          // the over-tall cues then overlap. Flag it; the fix is a blank line.
+          slot.invalid = "lazy-body";
         }
       }
 
@@ -290,6 +305,18 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
   }
 
   return slots;
+}
+
+/** Human-readable warning shown as a `title` tooltip on a cue flagged
+ *  `invalid`. Centralised here so the Reading-view post-processor and the Live
+ *  Preview decorator show the same message for each reason. */
+export function invalidTooltip(reason: NonNullable<Slot["invalid"]>): string {
+  switch (reason) {
+    case "adjacent-cue":
+      return "Cue has no body block before the next cue. Add content below, or merge the cues.";
+    case "lazy-body":
+      return "This cue's notes are glued to it. Add a blank line between the cue and the text below so the notes move into the notes column.";
+  }
 }
 
 /** Review-mode placement decision for a single slot (pure). Returns whether the
@@ -549,6 +576,19 @@ function classifyLines(lns: Line[]): LineKind[] {
   }
 
   return out;
+}
+
+/** True when a non-blank `body` line sitting directly under a callout would be
+ *  folded into it by Markdown "lazy continuation" — i.e. it is plain paragraph
+ *  text rather than a line that starts its own block. List items and table rows
+ *  start a new block and break out of the callout instead, so they are excluded
+ *  (and must NOT be flagged). Headings, horizontal rules, code fences and blank
+ *  lines are already separate line kinds, so only list/table need excluding. */
+function isLazyContinuation(text: string): boolean {
+  const t = text.replace(/^\s+/, "");
+  if (/^([-*+]|\d+[.)])\s+/.test(t)) return false; // list item
+  if (t.startsWith("|")) return false; // table row
+  return true;
 }
 
 function allBlankBetween(
