@@ -1,6 +1,6 @@
 # Cornell Notes — Obsidian Plugin
 
-Cornell-style note layout for Obsidian using native callouts. A title sits across the top, cue callouts appear in a left margin column beside the notes, and a full-width summary band runs across the bottom. You can stack several Cornell pages in one file. Works in both Reading view and Live Preview — titles and cues remain inline-editable in Live Preview without switching to source mode.
+A Cornell-style note layout for Obsidian, built on **standard Obsidian callouts** — no custom syntax or file format. You tag a note with the `cornell-note` cssclass and write ordinary `> [!cue]`, `> [!summary]`, and `> [!title]` callouts; the plugin arranges those native callouts into the Cornell layout: a title across the top, cue callouts in a left margin column beside the notes, and a full-width summary band running across the bottom. It positions the callouts in both Reading view and Live Preview (titles and cues stay inline-editable in Live Preview, no source-mode switching needed), and you can stack several Cornell pages in one file.
 
 ## Screenshots
 
