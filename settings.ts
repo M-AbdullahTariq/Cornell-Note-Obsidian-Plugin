@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type CornellNotesPlugin from "./main";
 
 export interface CornellSettings {
@@ -13,6 +13,10 @@ export interface CornellSettings {
    *  auto-expands into `> [!summary] `. Empty disables the shortcut — the user
    *  can always still type `> [!summary]` by hand. Mirrors `cueShortcut`. */
   summaryShortcut: string;
+  /** A trigger word the user types on its own line in a Cornell note; it
+   *  auto-expands into `> [!title] `. Empty disables the shortcut — the user
+   *  can always still type `> [!title]` by hand. Mirrors `cueShortcut`. */
+  titleShortcut: string;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
@@ -21,7 +25,30 @@ export const DEFAULT_SETTINGS: CornellSettings = {
   dividerThickness: 1,
   cueShortcut: "",
   summaryShortcut: "",
+  titleShortcut: "",
 };
+
+/** The three shortcut trigger words, keyed by callout kind. */
+export interface ShortcutTriggers {
+  cue: string;
+  summary: string;
+  title: string;
+}
+
+/** Pure validator: returns the trigger word shared by two or more shortcuts
+ *  (after trimming; blank triggers are ignored), or null when every non-empty
+ *  trigger is distinct. The settings tab uses this to block ambiguous configs —
+ *  two shortcuts must never expand from the same word. */
+export function findDuplicateTrigger(triggers: ShortcutTriggers): string | null {
+  const seen = new Set<string>();
+  for (const raw of [triggers.cue, triggers.summary, triggers.title]) {
+    const t = raw.trim();
+    if (!t) continue;
+    if (seen.has(t)) return t;
+    seen.add(t);
+  }
+  return null;
+}
 
 export class CornellSettingsTab extends PluginSettingTab {
   private plugin: CornellNotesPlugin;
@@ -83,32 +110,78 @@ export class CornellSettingsTab extends PluginSettingTab {
           })
       );
 
-    new Setting(containerEl)
-      .setName("Cue shortcut")
-      .setDesc(
-        "Type this word on its own line in a Cornell note and it auto-expands into '> [!cue] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!cue]' by hand). Example: cc"
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g. cc")
-          .setValue(this.plugin.settings.cueShortcut)
-          .onChange(async (value) => {
-            this.plugin.settings.cueShortcut = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
+    this.addShortcutSetting(containerEl, {
+      key: "cue",
+      name: "Cue shortcut",
+      desc: "Type this word on its own line in a Cornell note and it auto-expands into '> [!cue] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!cue]' by hand). Must differ from the summary and title shortcuts. Example: cc",
+      placeholder: "e.g. cc",
+    });
+
+    this.addShortcutSetting(containerEl, {
+      key: "summary",
+      name: "Summary shortcut",
+      desc: "Type this word on its own line in a Cornell note and it auto-expands into '> [!summary] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!summary]' by hand). Must differ from the cue and title shortcuts. Example: ss",
+      placeholder: "e.g. ss",
+    });
+
+    this.addShortcutSetting(containerEl, {
+      key: "title",
+      name: "Title shortcut",
+      desc: "Type this word on its own line in a Cornell note and it auto-expands into '> [!title] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!title]' by hand). Must differ from the cue and summary shortcuts. Example: tt",
+      placeholder: "e.g. tt",
+    });
+  }
+
+  /** Live snapshot of all three shortcut triggers from saved settings. */
+  private currentTriggers(): ShortcutTriggers {
+    return {
+      cue: this.plugin.settings.cueShortcut,
+      summary: this.plugin.settings.summaryShortcut,
+      title: this.plugin.settings.titleShortcut,
+    };
+  }
+
+  /** Render one shortcut text setting. All three route through here so the
+   *  distinct-trigger check applies uniformly: a value that collides with
+   *  another non-empty shortcut is rejected (error notice + field reverts to
+   *  the last saved value); a blank value always disables that shortcut. */
+  private addShortcutSetting(
+    containerEl: HTMLElement,
+    opts: {
+      key: keyof ShortcutTriggers;
+      name: string;
+      desc: string;
+      placeholder: string;
+    }
+  ): void {
+    const settingKey = `${opts.key}Shortcut` as
+      | "cueShortcut"
+      | "summaryShortcut"
+      | "titleShortcut";
 
     new Setting(containerEl)
-      .setName("Summary shortcut")
-      .setDesc(
-        "Type this word on its own line in a Cornell note and it auto-expands into '> [!summary] ', dropping the cursor right after it. Leave blank to disable (you can always type '> [!summary]' by hand). If set to the same word as the cue shortcut, the cue wins. Example: ss"
-      )
+      .setName(opts.name)
+      .setDesc(opts.desc)
       .addText((text) =>
         text
-          .setPlaceholder("e.g. ss")
-          .setValue(this.plugin.settings.summaryShortcut)
+          .setPlaceholder(opts.placeholder)
+          .setValue(this.plugin.settings[settingKey])
           .onChange(async (value) => {
-            this.plugin.settings.summaryShortcut = value.trim();
+            const candidate = value.trim();
+            // Test the candidate against the other two live triggers. A blank
+            // candidate can never collide, so it's always accepted.
+            const triggers = this.currentTriggers();
+            triggers[opts.key] = candidate;
+            if (candidate && findDuplicateTrigger(triggers) === candidate) {
+              new Notice(
+                `Shortcut "${candidate}" is already used by another shortcut. Pick a different word.`
+              );
+              // Revert the field to the last saved value (setValue does not
+              // re-fire onChange, so this won't loop).
+              text.setValue(this.plugin.settings[settingKey]);
+              return;
+            }
+            this.plugin.settings[settingKey] = candidate;
             await this.plugin.saveSettings();
           })
       );

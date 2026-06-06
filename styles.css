@@ -330,6 +330,101 @@
 }
 
 /* =====================================================================
+ * Review mode (Reading view)
+ *
+ * An active-recall study mode: cue titles and the page title stay visible as
+ * prompts while each cue's notes region and the summary are blurred until
+ * revealed. The gate is the `cornell-review` class the plugin toggles on the
+ * preview sizer; the `data-cornell-review-blur` marker and the
+ * `data-cornell-cue-group` reveal key are stamped on wrappers unconditionally
+ * by the post-processor, so flipping the mode is a pure class toggle (no
+ * re-render). A wrapper un-blurs once it carries `data-cornell-revealed`
+ * (added on click — see the controller).
+ * ===================================================================== */
+.cornell-note .markdown-preview-sizer.cornell-review {
+  /* Strong ease-out — clarity arrives immediately on click, then settles. */
+  --cornell-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* What blurs in each blurrable wrapper:
+ *  - body / heading wrappers: their whole content (`> *`).
+ *  - summary wrapper: ONLY the callout body (`.callout-content`). The summary
+ *    title — "Summary" or a custom one like "Key Take Away" — stays visible as
+ *    a prompt, exactly like a cue title.
+ * The blur always lands on content, never the wrapper, so the cue|notes divider
+ * and the notes/summary separator (borders ON the wrapper) stay crisp. The
+ * sharp / revealed state is the default; the reveal is the smooth path. */
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-review-blur]:not([data-cornell-slot="summary"])
+  > *,
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"][data-cornell-review-blur]
+  .callout-content {
+  filter: blur(0);
+  opacity: 1;
+  transition: filter 220ms var(--cornell-ease-out),
+    opacity 220ms var(--cornell-ease-out);
+}
+
+/* Hidden state: blur + dim the content so the reveal has something to animate
+ * toward. Re-blur (hiding) is snappier than the reveal — fast where the system
+ * responds, smoother where the answer is unveiled. `user-select: none` keeps
+ * blurred text unselectable; it returns to normal once revealed. */
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-review-blur]:not([data-cornell-revealed]):not([data-cornell-slot="summary"])
+  > *,
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"][data-cornell-review-blur]:not([data-cornell-revealed])
+  .callout-content {
+  filter: blur(6px);
+  opacity: 0.55;
+  user-select: none;
+  transition: filter 140ms var(--cornell-ease-out),
+    opacity 140ms var(--cornell-ease-out);
+}
+
+/* Reduced motion: keep the blur/clarity end states (they aid comprehension)
+ * but drop the timing so there's no animated motion. */
+@media (prefers-reduced-motion: reduce) {
+  .cornell-note
+    .markdown-preview-sizer.cornell-review
+    > [data-cornell-review-blur]:not([data-cornell-slot="summary"])
+    > *,
+  .cornell-note
+    .markdown-preview-sizer.cornell-review
+    > [data-cornell-slot="summary"][data-cornell-review-blur]
+    .callout-content {
+    transition-duration: 1ms;
+  }
+}
+
+/* Reveal triggers — cues and the summary are clickable in review mode. The
+ * pointer cursor and a subtle accent outline on hover signal "click to
+ * reveal" (and, once revealed, "click to hide again"). */
+.cornell-note .markdown-preview-sizer.cornell-review > [data-cornell-slot="cue"],
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"] {
+  cursor: pointer;
+}
+
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="cue"]:hover
+  .callout,
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"]:hover
+  .callout {
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+  border-radius: var(--callout-radius, 4px);
+}
+
+/* =====================================================================
  * Live Preview (CodeMirror 6) layout
  *
  * CM6 manages `.cm-content`'s layout for cursor positioning; turning it

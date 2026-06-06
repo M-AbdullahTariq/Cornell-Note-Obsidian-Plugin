@@ -39,11 +39,21 @@ export interface Slot {
   notesEnd?: boolean;
   /** `full` only: true when the block is a horizontal rule `---`. */
   isHorizontalRule?: boolean;
+  /** `full` only: true when the block is a heading (`#`..`######`). Lets review
+   *  mode blur in-region headings while leaving horizontal rules and
+   *  frontmatter — also `full` slots — untouched. */
+  isHeading?: boolean;
   /** 0-based Cornell "page" this slot belongs to. A `>[!title]` callout starts
    *  a new page; everything before the first title is page 0 (the file-name
    *  page). Renderers use it to scope a summary to its page and to separate
    *  consecutive pages. */
   page?: number;
+  /** 0-based ordinal of the cue that "owns" this slot for review mode. Each cue
+   *  gets an ordinal; every block in its notes region (until the next cue /
+   *  title / summary, or end) inherits it, so review mode can reveal a cue's
+   *  whole region as a unit. `null` for titles, summaries, and orphan content
+   *  before the first cue — none of which is owned by a cue. */
+  cueGroup?: number | null;
 }
 
 const CORNELL_CLASS = "cornell-note";
@@ -200,6 +210,7 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
         role: "full",
         sourceRange: blockRange(i, i + 1),
         lineRanges: lineRangesOf(i, i + 1),
+        isHeading: true,
       });
       i++;
       continue;
@@ -257,7 +268,58 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
     slot.page = page;
   }
 
+  // Cue-group assignment (review mode): each cue gets a 0-based ordinal and
+  // every slot in its notes region inherits it — the region runs from the cue
+  // until the next cue, title, or summary, or the end. A title or summary ends
+  // the current region and is itself unowned; content before the first cue
+  // (orphans) stays unowned (null). Renderers map the ordinal to a reveal key
+  // so clicking a cue toggles its whole region. Ordinals are global across
+  // pages — reveal is per-cue regardless of page.
+  let cueOrdinal = -1;
+  let currentCue: number | null = null;
+  for (const slot of slots) {
+    if (slot.role === "cue") {
+      currentCue = ++cueOrdinal;
+      slot.cueGroup = currentCue;
+    } else if (slot.role === "title" || slot.role === "summary") {
+      currentCue = null;
+      slot.cueGroup = null;
+    } else {
+      slot.cueGroup = currentCue;
+    }
+  }
+
   return slots;
+}
+
+/** Review-mode placement decision for a single slot (pure). Returns whether the
+ *  slot should be blurred in review mode and the reveal-group key it
+ *  participates in:
+ *
+ *  - A cue is never blurred but carries its group key, since clicking it is what
+ *    reveals the region.
+ *  - Body blocks and in-region headings owned by a cue blur and share that cue's
+ *    group key, so they reveal together when the cue is clicked.
+ *  - A summary blurs and is its own reveal target (keyed per page).
+ *  - Titles, horizontal rules, frontmatter, gaps, and orphan content (no owning
+ *    cue) are never blurred and carry no group key.
+ *
+ *  `group` is the single source of truth for what the DOM controller stamps as
+ *  `data-cornell-cue-group`; `blur` drives the blur marker. */
+export function reviewBlurInfo(
+  slot: Slot
+): { blur: boolean; group: string | null } {
+  if (slot.role === "summary") {
+    return { blur: true, group: `summary:${slot.page ?? 0}` };
+  }
+  if (slot.role === "cue" && slot.cueGroup != null) {
+    return { blur: false, group: `cue:${slot.cueGroup}` };
+  }
+  if (slot.cueGroup != null) {
+    const isBlurrable = slot.role === "body" || (slot.role === "full" && !!slot.isHeading);
+    if (isBlurrable) return { blur: true, group: `cue:${slot.cueGroup}` };
+  }
+  return { blur: false, group: null };
 }
 
 /** True when the document's first content block (after any YAML frontmatter)

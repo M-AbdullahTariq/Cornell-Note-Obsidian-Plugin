@@ -4,12 +4,14 @@ import {
   classifySection,
   hasCornellCssClass,
   leadsWithTitle,
+  reviewBlurInfo,
 } from "./classifier";
 import {
   buildCornellEditorExtension,
   buildCalloutExpander,
   cornellRefreshEffect,
 } from "./livePreview";
+import { ReviewModeController } from "./reviewMode";
 import {
   CornellSettings,
   CornellSettingsTab,
@@ -60,10 +62,12 @@ function sizerChild(el: HTMLElement): HTMLElement | null {
 
 export default class CornellNotesPlugin extends Plugin {
   settings: CornellSettings = { ...DEFAULT_SETTINGS };
+  private reviewMode!: ReviewModeController;
 
   async onload() {
     await this.loadSettings();
     this.applyCssVariables();
+    this.reviewMode = new ReviewModeController(this.app);
     this.addSettingTab(new CornellSettingsTab(this.app, this));
 
     this.addCommand({
@@ -71,6 +75,25 @@ export default class CornellNotesPlugin extends Plugin {
       name: "Create new Cornell note",
       callback: () => this.createCornellNote(),
     });
+
+    this.addCommand({
+      id: "toggle-review-mode",
+      name: "Toggle review mode",
+      callback: () => this.reviewMode.toggle(),
+    });
+
+    this.addCommand({
+      id: "reset-review-reveals",
+      name: "Reset review reveals (re-blur all)",
+      callback: () => this.reviewMode.resetReveals(),
+    });
+
+    // Click a cue (or the summary) in review mode to reveal/hide its region.
+    // Delegated on the document so it survives Reading-view re-renders and
+    // leaf changes; the handler is a no-op unless review mode is active.
+    this.registerDomEvent(document, "click", (evt) =>
+      this.reviewMode.handleClick(evt)
+    );
 
     this.addRibbonIcon(
       "columns-3",
@@ -89,6 +112,10 @@ export default class CornellNotesPlugin extends Plugin {
           {
             trigger: this.settings.summaryShortcut.trim(),
             insert: "> [!summary] ",
+          },
+          {
+            trigger: this.settings.titleShortcut.trim(),
+            insert: "> [!title] ",
           },
         ],
       }),
@@ -113,6 +140,9 @@ export default class CornellNotesPlugin extends Plugin {
           "cornell-leading-title",
           leadsWithTitle(source, cache?.frontmatter)
         );
+        // Reflect the global review-mode state onto this sizer so a freshly
+        // rendered Cornell note matches it without waiting for a toggle.
+        this.reviewMode.syncSizer(sizer);
       }
 
       // Resolve which slot this rendered block is by SOURCE POSITION rather
@@ -136,6 +166,26 @@ export default class CornellNotesPlugin extends Plugin {
       // direct child) so the stylesheet can place it without `:has()` guesswork.
       const wrapper = sizerChild(el) ?? el;
       wrapper.setAttribute("data-cornell-slot", slot.role);
+
+      // Review-mode markers (stamped unconditionally — the `cornell-review`
+      // class on the sizer is what actually gates the blur, so toggling review
+      // mode never needs a re-render). `data-cornell-cue-group` is the reveal
+      // key; `data-cornell-review-blur` marks blocks that blur until revealed.
+      const review = reviewBlurInfo(slot);
+      if (review.group) {
+        wrapper.setAttribute("data-cornell-cue-group", review.group);
+      } else {
+        wrapper.removeAttribute("data-cornell-cue-group");
+      }
+      if (review.blur) {
+        wrapper.setAttribute("data-cornell-review-blur", "");
+      } else {
+        wrapper.removeAttribute("data-cornell-review-blur");
+      }
+
+      // Re-apply any reveal the user already made for this group, so revealed
+      // regions survive Reading-view re-renders rather than snapping re-blurred.
+      this.reviewMode.restoreWrapper(wrapper, ctx.sourcePath);
 
       // Break the divider line before the next cue, but only on the section
       // that holds the region's last source line. A body slot can render as
