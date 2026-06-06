@@ -326,6 +326,36 @@
   margin-bottom: var(--cue-gap);
 }
 
+/* =====================================================================
+ * Heading fold arrow — suppressed inside Cornell notes
+ *
+ * Obsidian shows a native heading collapse arrow (Reading view: the
+ * `.heading-collapse-indicator` on hover; Live Preview: the fold-gutter
+ * marker). Its fold range is decided by Obsidian from heading LEVELS — it
+ * collapses everything down to the next same-or-higher heading, ignoring the
+ * `>[!cue]` callouts in between. In a Cornell sheet a heading is a section
+ * LABEL inside the notes column, not a document-outline node, and a note often
+ * has a single heading — so folding it collapses the whole sheet, not "the
+ * notes under this heading." Obsidian won't let a CSS/post-processor plugin
+ * redefine the fold range, so we remove the affordance instead. Scoped to
+ * `.cornell-note`, so folding in every other note is untouched.
+ * ===================================================================== */
+
+/* Reading view: the arrow is the only fold trigger here, so hiding it disables
+ * heading folding for Cornell notes. */
+.cornell-note .heading-collapse-indicator {
+  display: none !important;
+}
+
+/* Live Preview: blank the fold-gutter markers with `visibility` (not
+ * `display`) so the gutter keeps its width and the content doesn't shift left,
+ * which would knock the cue column out of alignment. This also hides list/code
+ * fold markers within a Cornell note — an acceptable trade for a layout where
+ * heading folding is the thing breaking. */
+.cornell-note .cm-foldGutter .cm-gutterElement {
+  visibility: hidden;
+}
+
 /* Summary → full-width band across BOTH columns at the bottom of its page,
  * like the classic Cornell sheet. It spans every grid track via the default
  * `> *` rule above (grid-column: 1 / -1), so no explicit placement is needed —
