@@ -164,8 +164,20 @@ export default class CornellNotesPlugin extends Plugin {
 
       // Stamp the slot role on the grid-item wrapper (the preview-sizer's
       // direct child) so the stylesheet can place it without `:has()` guesswork.
+      // Headings are a `full` slot, but get their own `heading` value so the
+      // stylesheet can place them in the notes column (col 3) instead of full
+      // width; in-region headings additionally carry `data-cornell-in-region`,
+      // which draws the cue|notes divider through them (orphan headings sit in
+      // the column but draw no divider segment).
       const wrapper = sizerChild(el) ?? el;
-      wrapper.setAttribute("data-cornell-slot", slot.role);
+      wrapper.setAttribute(
+        "data-cornell-slot",
+        slot.isHeading ? "heading" : slot.role
+      );
+      wrapper.toggleAttribute(
+        "data-cornell-in-region",
+        !!slot.isHeading && slot.cueGroup != null
+      );
 
       // Review-mode markers (stamped unconditionally — the `cornell-review`
       // class on the sizer is what actually gates the blur, so toggling review

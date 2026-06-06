@@ -275,6 +275,75 @@ body
   assert.equal(classifySection(md, FM, 0, 0)?.notesEnd, false);
 });
 
+// Headings now sit IN a cue's notes region (notes column) and the cue|notes
+// divider runs through them: a body before an in-region heading must NOT break
+// the line, and the region's true last block (body or heading) is the break.
+test("an in-region heading keeps the divider running through it", () => {
+  const md = `> [!cue] Topic
+
+FIRST_BODY
+
+## In-region heading
+
+SECOND_BODY
+
+> [!cue] Next
+
+LAST
+`;
+  const slots = classifyBlocks(md, FM);
+  const heading = slots.find((s) => s.isHeading);
+  assert.ok(heading, "heading slot exists");
+  assert.equal(heading!.role, "full");
+  assert.ok(heading!.cueGroup != null, "heading is owned by its cue");
+  assert.ok(!heading!.notesEnd, "an interior heading does not end the region");
+
+  const bodyOf = (m: string) =>
+    slots.find(
+      (s) =>
+        s.role === "body" &&
+        md.indexOf(m) >= s.sourceRange.from &&
+        md.indexOf(m) < s.sourceRange.to
+    );
+  assert.ok(!bodyOf("FIRST_BODY")?.notesEnd); // continues into heading
+  assert.equal(bodyOf("SECOND_BODY")?.notesEnd, true); // last of the region
+});
+
+test("a heading at the tail of a region is itself the divider break", () => {
+  const md = `> [!cue] Topic
+
+BODY
+
+## Trailing heading
+
+> [!cue] Next
+
+LAST
+`;
+  const slots = classifyBlocks(md, FM);
+  assert.ok(
+    slots.find((s) => s.isHeading)?.notesEnd,
+    "a trailing in-region heading breaks the divider"
+  );
+  const body = slots.find(
+    (s) => s.role === "body" && md.indexOf("BODY") >= s.sourceRange.from
+  );
+  assert.ok(!body?.notesEnd, "body before the heading stays connected");
+});
+
+test("a heading before any cue is an orphan: no owning cue, no divider", () => {
+  const md = `## Orphan heading
+
+> [!cue] Topic
+
+body
+`;
+  const heading = classifyBlocks(md, FM).find((s) => s.isHeading);
+  assert.ok(heading, "heading exists");
+  assert.equal(heading!.cueGroup, null, "orphan heading has no owning cue");
+  assert.ok(!heading!.notesEnd, "an orphan heading is not a divider block");
+});
+
 test("a cue with a body block is not flagged invalid", () => {
   const md = `> [!cue] Valid
 ## Valid

@@ -301,6 +301,31 @@
   margin-bottom: var(--cue-gap);
 }
 
+/* Headings → notes column (col 3), aligned with body text — NOT full width.
+ * This matches Live Preview (where headings already sit in the notes column)
+ * and keeps a `#`..`######` heading out of the cue margin. The grid's sparse
+ * auto-flow places the heading in the notes column on its cue's row, with the
+ * body dropping below. Every heading gets the column; only an in-region heading
+ * (one with an owning cue) carries the cue|notes divider, so the vertical line
+ * runs unbroken through it. An orphan heading (before the first cue) sits in the
+ * column with no divider segment, so the line never floats with no notes. */
+.cornell-note .markdown-preview-sizer > [data-cornell-slot="heading"] {
+  grid-column: 3;
+}
+.cornell-note
+  .markdown-preview-sizer
+  > [data-cornell-slot="heading"][data-cornell-in-region] {
+  align-self: stretch;
+  border-left: var(--cue-line);
+  padding-left: 15px;
+  margin: 0;
+}
+.cornell-note
+  .markdown-preview-sizer
+  > [data-cornell-slot="heading"][data-cornell-notes-end] {
+  margin-bottom: var(--cue-gap);
+}
+
 /* Summary → full-width band across BOTH columns at the bottom of its page,
  * like the classic Cornell sheet. It spans every grid track via the default
  * `> *` rule above (grid-column: 1 / -1), so no explicit placement is needed —
@@ -465,6 +490,16 @@
  * per-wrapper border-left. Stops at the first horizontal rule so the
  * summary region has no divider. */
 .cornell-note .cm-line.cornell-body-line {
+  border-left: var(--cue-line);
+  padding-left: 15px;
+}
+
+/* In-region heading line (Live Preview): same divider + indent as a body line,
+ * so a `#`..`######` heading sits in the notes column aligned with the body and
+ * the cue|notes line runs through it — matching Reading view. Only in-region
+ * headings carry the class (livePreview.ts); orphan headings keep the content's
+ * default indent with no divider. */
+.cornell-note .cm-line.cornell-heading-line {
   border-left: var(--cue-line);
   padding-left: 15px;
 }

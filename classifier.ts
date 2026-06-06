@@ -36,10 +36,11 @@ export interface Slot {
    *    callout (the notes render in the narrow cue column). The fix is a blank
    *    line; see `isLazyContinuation`. */
   invalid?: "adjacent-cue" | "lazy-body";
-  /** Body only: true when this body block is the last in its cue's notes
-   *  region (the next block is a cue / heading / rule / summary, or there is
-   *  none). Reading view uses it to break the continuous divider line before
-   *  the next cue — within a region the line spans every block unbroken. */
+  /** Body or in-region heading: true when this block is the last divider-
+   *  participating block in its cue's notes region (the next block is a cue /
+   *  title / summary / rule / orphan heading, or there is none). Reading view
+   *  uses it to break the continuous divider line before the next cue — within a
+   *  region the line spans every body block and in-region heading unbroken. */
   notesEnd?: boolean;
   /** `full` only: true when the block is a horizontal rule `---`. */
   isHorizontalRule?: boolean;
@@ -264,16 +265,6 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
     i = m;
   }
 
-  // A body block ends its cue's notes region when the next block isn't another
-  // body (a cue, heading, rule, or summary follows — or it's the last block).
-  // Reading view breaks the divider line there; consecutive body blocks within
-  // the same region stay connected for one continuous line.
-  for (let s = 0; s < slots.length; s++) {
-    if (slots[s].role !== "body") continue;
-    const next = slots[s + 1];
-    if (!next || next.role !== "body") slots[s].notesEnd = true;
-  }
-
   // Page assignment: a `>[!title]` starts a new page. Everything before the
   // first title is page 0 (the file-name page); each title increments the
   // counter so its block and the content beneath it share a page number.
@@ -302,6 +293,24 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
     } else {
       slot.cueGroup = currentCue;
     }
+  }
+
+  // Divider regions (computed after cueGroup, which it depends on). A cue's
+  // notes region is the run of body blocks AND the in-region headings between
+  // them — a heading sits in the notes column and the cue|notes divider runs
+  // unbroken through it. A divider-participating block is the region's last
+  // when the next block isn't also one (a cue / title / summary / rule / orphan
+  // heading follows, or it's the end). Reading view breaks the line there;
+  // consecutive participating blocks stay connected for one continuous line.
+  // An orphan heading (no owning cue) does NOT participate — it gets the notes
+  // column but draws no divider segment.
+  const dividing = (slot?: Slot): boolean =>
+    !!slot &&
+    (slot.role === "body" ||
+      (slot.role === "full" && !!slot.isHeading && slot.cueGroup != null));
+  for (let s = 0; s < slots.length; s++) {
+    if (!dividing(slots[s])) continue;
+    if (!dividing(slots[s + 1])) slots[s].notesEnd = true;
   }
 
   return slots;
@@ -431,7 +440,7 @@ export function classifySection(
   const slot = slotForLineRange(markdown, frontmatter, lineStart, lineEnd);
   if (!slot) return null;
   let notesEnd = false;
-  if (slot.role === "body" && slot.notesEnd) {
+  if (slot.notesEnd && (slot.role === "body" || slot.isHeading)) {
     notesEnd = lineEnd >= lineIndexOf(markdown, slot.sourceRange.to - 1);
   }
   return { slot, notesEnd };

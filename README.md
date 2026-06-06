@@ -79,7 +79,7 @@ Notes for page two.
 > Summary of page two.
 ```
 
-Anything you write under a cue — paragraphs, lists, tables, embedded images, code blocks, and even other callouts (`note`, `tip`, `warning`, …) — sits in the notes column and shares one continuous divider line, so the whole block reads as belonging to that cue. Only headings, the `---` rule, and the `summary` span the full page width.
+Anything you write under a cue — paragraphs, lists, tables, embedded images, code blocks, headings (`#`..`######`), and even other callouts (`note`, `tip`, `warning`, …) — sits in the notes column and shares one continuous divider line, so the whole block reads as belonging to that cue. A heading sits in the notes column beside its cue (the divider runs through it), matching where the body goes. Only the `---` rule and the `summary` span the full page width. (A heading written *before* any cue has no notes column to join, so it stays full-width.)
 
 ### Faster callouts
 
@@ -92,7 +92,7 @@ The three trigger words must be **distinct** — if you set the same word for tw
 Review mode turns a Cornell note into an active-recall study sheet. Run the **"Toggle review mode"** command: cue titles (and the page title) stay visible as prompts, while each cue's notes region and the summary are **blurred**. Read a cue, try to recall its notes, then **click the cue to reveal them** (click again to re-hide). Reveals accumulate, so you can open several at once; **click the summary** to reveal/hide it on its own.
 
 - Review mode is **global** (it affects every open Cornell note) and works in **Reading view** only — switch to Reading view to use it.
-- Clicking a cue reveals all the body notes in its region together. Full-width headings stay visible (they read as prompts alongside the cue), as do the page title, the cue callouts themselves, the summary title, horizontal rules, and any content before the first cue.
+- Clicking a cue reveals all the body notes in its region together. Headings stay visible (they read as prompts alongside the cue) even though they sit in the notes column, as do the page title, the cue callouts themselves, the summary title, horizontal rules, and any content before the first cue.
 - Run **"Reset review reveals (re-blur all)"** to re-hide everything and start the recall over without leaving review mode. Toggling review mode off also clears all reveals.
 
 ## Settings

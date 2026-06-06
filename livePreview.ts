@@ -19,6 +19,7 @@ const SUMMARY_LINE_CLASS = "cornell-summary-line";
 const SUMMARY_START_CLASS = "cornell-summary-start";
 const TITLE_LINE_CLASS = "cornell-title-line";
 const BODY_LINE_CLASS = "cornell-body-line";
+const HEADING_LINE_CLASS = "cornell-heading-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
 
@@ -136,6 +137,23 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
             for (const r of slot.lineRanges) {
               ranges.push(
                 Decoration.line({ class: COLLAPSED_GAP_CLASS }).range(
+                  view.state.doc.lineAt(r.from).from
+                )
+              );
+            }
+          } else if (
+            slot.role === "full" &&
+            slot.isHeading &&
+            slot.cueGroup != null
+          ) {
+            // In-region heading: give its line(s) the same divider + indent as
+            // a body line so a heading sits in the notes column aligned with the
+            // body and the cue|notes line runs through it — matching Reading
+            // view. Orphan headings (no owning cue) get no class and stay at the
+            // content's default indent, no divider.
+            for (const r of slot.lineRanges) {
+              ranges.push(
+                Decoration.line({ class: HEADING_LINE_CLASS }).range(
                   view.state.doc.lineAt(r.from).from
                 )
               );
