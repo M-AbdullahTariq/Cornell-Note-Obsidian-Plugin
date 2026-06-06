@@ -121,3 +121,7 @@ npm run build
 ```
 
 Produces `main.js`. The plugin folder is symlinked into the vault's `.obsidian/plugins/cornell-notes`.
+
+## License
+
+Licensed under the [GNU General Public License v3.0](LICENSE).
