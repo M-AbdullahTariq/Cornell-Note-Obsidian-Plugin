@@ -347,12 +347,14 @@
   display: none !important;
 }
 
-/* Live Preview: blank the fold-gutter markers with `visibility` (not
- * `display`) so the gutter keeps its width and the content doesn't shift left,
- * which would knock the cue column out of alignment. This also hides list/code
- * fold markers within a Cornell note — an acceptable trade for a layout where
- * heading folding is the thing breaking. */
-.cornell-note .cm-foldGutter .cm-gutterElement {
+/* Live Preview: Obsidian's CM6 fold arrow is a `.collapse-indicator` inside a
+ * `.cm-fold-indicator` gutter element (its OWN gutter, not CodeMirror's stock
+ * `.cm-foldGutter`). Blank the arrow with `visibility` (not `display`) so its
+ * gutter box keeps its width — no content shift — and, because hidden elements
+ * take no pointer events, the arrow also stops being clickable, disabling the
+ * fold. This hides list fold markers inside a Cornell note too — an acceptable
+ * trade for a layout where heading folding is the thing breaking. */
+.cornell-note .cm-fold-indicator .collapse-indicator {
   visibility: hidden;
 }
 
