@@ -86,6 +86,7 @@ export class CornellSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Divider line color")
       .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- "e.g." is mis-read as a sentence end
         "Color of the vertical line between the cue column and the notes body. Any CSS color value (e.g. lightgrey, #ccc, rgb(180, 180, 180))."
       )
       .addText((text) =>
@@ -118,6 +119,7 @@ export class CornellSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Highlight cue on hover (review mode)")
       .setDesc(
+        // eslint-disable-next-line obsidianmd/ui/sentence-case -- false positive on the em-dash clause
         "In review mode, draw a colored box around a cue (and the summary) when you hover it, marking it as clickable. Off by default — the cursor still changes to a pointer either way."
       )
       .addToggle((toggle) =>
@@ -173,10 +175,7 @@ export class CornellSettingsTab extends PluginSettingTab {
       placeholder: string;
     }
   ): void {
-    const settingKey = `${opts.key}Shortcut` as
-      | "cueShortcut"
-      | "summaryShortcut"
-      | "titleShortcut";
+    const settingKey = `${opts.key}Shortcut` as const;
 
     new Setting(containerEl)
       .setName(opts.name)

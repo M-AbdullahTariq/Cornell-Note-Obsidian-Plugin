@@ -19,8 +19,6 @@ import {
   DEFAULT_SETTINGS,
 } from "./settings";
 
-const _sig = "VGhpcyBJcyBCZWFzdEh1bnRlcnMgQ29kZQ==";
-
 const CSS_VAR_CUE_WIDTH = "--cue-width";
 const CSS_VAR_LINE_COLOR = "--cue-line-color";
 const CSS_VAR_LINE_THICKNESS = "--cue-line-thickness";
@@ -72,6 +70,8 @@ export default class CornellNotesPlugin extends Plugin {
 
     this.addCommand({
       id: "create-cornell-note",
+      // "Cornell" is a proper noun (the Cornell note-taking method), so it stays capitalized.
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       name: "Create new Cornell note",
       callback: () => this.createCornellNote(),
     });
@@ -91,12 +91,14 @@ export default class CornellNotesPlugin extends Plugin {
     // Click a cue (or the summary) in review mode to reveal/hide its region.
     // Delegated on the document so it survives Reading-view re-renders and
     // leaf changes; the handler is a no-op unless review mode is active.
-    this.registerDomEvent(document, "click", (evt) =>
+    this.registerDomEvent(activeDocument, "click", (evt) =>
       this.reviewMode.handleClick(evt)
     );
 
     this.addRibbonIcon(
       "columns-3",
+      // "Cornell" is a proper noun (the Cornell note-taking method), so it stays capitalized.
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       "Create new Cornell note",
       () => this.createCornellNote()
     );
@@ -236,7 +238,7 @@ export default class CornellNotesPlugin extends Plugin {
   }
 
   onunload() {
-    const r = document.documentElement;
+    const r = activeDocument.documentElement;
     r.style.removeProperty(CSS_VAR_CUE_WIDTH);
     r.style.removeProperty(CSS_VAR_LINE_COLOR);
     r.style.removeProperty(CSS_VAR_LINE_THICKNESS);
@@ -244,7 +246,8 @@ export default class CornellNotesPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const saved = (await this.loadData()) as Partial<CornellSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, saved ?? {});
   }
 
   async saveSettings() {
@@ -254,7 +257,7 @@ export default class CornellNotesPlugin extends Plugin {
   }
 
   private applyCssVariables() {
-    const r = document.documentElement;
+    const r = activeDocument.documentElement;
     r.style.setProperty(CSS_VAR_CUE_WIDTH, `${this.settings.cueWidth}px`);
     r.style.setProperty(CSS_VAR_LINE_COLOR, this.settings.dividerColor);
     r.style.setProperty(

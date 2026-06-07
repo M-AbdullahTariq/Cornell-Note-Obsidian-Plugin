@@ -469,7 +469,8 @@ type LineKind =
   | { kind: "frontmatter-fence" }
   | { kind: "code-fence" }
   | { kind: "code-inside" }
-  | { kind: "callout-start"; calloutType: "cue" | "summary" | string; titleText: string }
+  // calloutType is any callout name; "cue" / "summary" / "title" are the ones we act on.
+  | { kind: "callout-start"; calloutType: string; titleText: string }
   | { kind: "callout-cont"; bodyText: string }
   | { kind: "blank" }
   | { kind: "heading"; level: number }

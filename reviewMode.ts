@@ -38,7 +38,7 @@ export class ReviewModeController {
     } else if (this.inReadingView()) {
       new Notice("Review mode on");
     } else {
-      new Notice("Review mode on — switch to Reading view to use it");
+      new Notice("Review mode on — switch to reading view to use it");
     }
   }
 
