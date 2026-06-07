@@ -5,7 +5,17 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.1]
+
+### Changed
+
+- Maintenance release for the Obsidian community review: passes the official
+  `eslint-plugin-obsidianmd` guideline checks (use `activeDocument` for popout
+  compatibility, typed `loadData()`, tidied union types and assertions) and
+  drops the `builtin-modules` dependency in favor of Node's built-in. No
+  user-facing behavior changes.
+
+## [1.0.0]
 
 ### Added
 
