@@ -70,9 +70,7 @@ export default class CornellNotesPlugin extends Plugin {
 
     this.addCommand({
       id: "create-cornell-note",
-      // "Cornell" is a proper noun (the Cornell note-taking method), so it stays capitalized.
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
-      name: "Create new Cornell note",
+      name: "Create new note",
       callback: () => this.createCornellNote(),
     });
 
@@ -97,9 +95,7 @@ export default class CornellNotesPlugin extends Plugin {
 
     this.addRibbonIcon(
       "columns-3",
-      // "Cornell" is a proper noun (the Cornell note-taking method), so it stays capitalized.
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
-      "Create new Cornell note",
+      "Create new note",
       () => this.createCornellNote()
     );
 

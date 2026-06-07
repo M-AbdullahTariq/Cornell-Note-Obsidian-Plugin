@@ -5,6 +5,16 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2]
+
+### Changed
+
+- Sentence-cased the command name, ribbon tooltip, and two setting
+  descriptions to satisfy the Obsidian review's UI-text rule. The "Create new
+  note" command and ribbon no longer repeat the plugin name (the command
+  palette already shows it).
+- README title now matches the plugin name in `manifest.json`.
+
 ## [1.0.1]
 
 ### Changed
