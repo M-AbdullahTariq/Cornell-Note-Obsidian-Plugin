@@ -14,7 +14,12 @@ import {
   leadsWithTitle,
   reviewBlurInfo,
 } from "./classifier";
-import { normalizePageSize, stampExportHost } from "./pdfExport";
+import {
+  collectCornellNotes,
+  descendantMarkdownFiles,
+  normalizePageSize,
+  stampExportHost,
+} from "./pdfExport";
 import { CornellPdfExportModal } from "./pdfExportModal";
 import {
   buildCornellEditorExtension,
@@ -125,12 +130,6 @@ export default class CornellNotesPlugin extends Plugin {
       id: "reset-review-reveals",
       name: "Reset review reveals (re-blur all)",
       callback: () => this.reviewMode.resetReveals(),
-    });
-
-    this.addCommand({
-      id: "export-cornell-pdf",
-      name: "Export note to PDF",
-      callback: () => this.exportActiveNoteToPdf(),
     });
 
     // Click a cue (or the summary) in review mode to reveal/hide its region.
@@ -289,44 +288,46 @@ export default class CornellNotesPlugin extends Plugin {
       })
     );
 
-    // Discoverability: a right-click menu item on Cornell notes, alongside the
-    // command-palette command. Desktop only — Obsidian's print dialog is.
+    // Right-click export. Two entry points, both desktop only (the Electron
+    // `printToPDF` capture path is desktop only):
+    //  - on a Cornell note → the export modal scoped to that one note;
+    //  - on a folder that contains Cornell notes → the modal scoped to every
+    //    Cornell note beneath it (descendants included). Right-clicking the
+    //    vault root is therefore the "export all Cornell notes" path.
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         if (Platform.isMobile) return;
-        if (!(file instanceof TFile) || file.extension !== "md") return;
-        const cache = this.app.metadataCache.getFileCache(file);
-        if (!hasCornellCssClass(cache?.frontmatter)) return;
-        menu.addItem((item) =>
-          item
-            .setTitle("Export cornell note to PDF")
-            .setIcon("file-text")
-            .onClick(() => new CornellPdfExportModal(this, file).open())
-        );
+        const getFrontmatter = (f: TFile): unknown =>
+          this.app.metadataCache.getFileCache(f)?.frontmatter;
+
+        if (file instanceof TFile && file.extension === "md") {
+          if (!hasCornellCssClass(getFrontmatter(file))) return;
+          menu.addItem((item) =>
+            item
+              .setTitle("Export to PDF")
+              .setIcon("file-text")
+              .onClick(() =>
+                new CornellPdfExportModal(this, [file]).open()
+              )
+          );
+          return;
+        }
+
+        if (file instanceof TFolder) {
+          const notes = collectCornellNotes(
+            descendantMarkdownFiles(file),
+            getFrontmatter
+          );
+          if (notes.length === 0) return;
+          menu.addItem((item) =>
+            item
+              .setTitle("Export cornell notes to PDF")
+              .setIcon("file-text")
+              .onClick(() => new CornellPdfExportModal(this, notes).open())
+          );
+        }
       })
     );
-  }
-
-  /** Command entry: validate the active note and export it to PDF, with a clear
-   *  notice for each reason it can't (mobile, no note, non-Cornell note). */
-  private exportActiveNoteToPdf(): void {
-    if (Platform.isMobile) {
-      new Notice("Cornell PDF export is desktop only.");
-      return;
-    }
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") {
-      new Notice("Open a cornell note to export it to PDF.");
-      return;
-    }
-    const cache = this.app.metadataCache.getFileCache(file);
-    if (!hasCornellCssClass(cache?.frontmatter)) {
-      new Notice(
-        "This note is not a cornell note (add the cornell-note cssclass)."
-      );
-      return;
-    }
-    new CornellPdfExportModal(this, file).open();
   }
 
   onunload() {

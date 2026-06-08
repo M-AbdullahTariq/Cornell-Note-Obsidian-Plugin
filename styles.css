@@ -866,10 +866,62 @@ body.cornell-printing
   width: 100%;
   height: 55vh;
   min-height: 360px;
-  background: #fff;
+  background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: auto;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* Selection header (count + select all/none) above the checkbox list. */
+.cornell-pdf-selection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.cornell-pdf-selection-title {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.cornell-pdf-selection-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Scrollable checkbox list of the in-scope Cornell notes. */
+.cornell-pdf-note-list {
+  max-height: 28vh;
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 4px;
+  margin-bottom: 12px;
+}
+.cornell-pdf-note-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.cornell-pdf-note-item:hover {
+  background: var(--background-modifier-hover);
+}
+.cornell-pdf-note-path {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  margin-left: auto;
+}
+
+.cornell-pdf-render-row {
+  margin-bottom: 8px;
+}
+.cornell-pdf-export-error {
+  color: var(--text-error);
 }
 
 /* Body-level host (positioned over the slot above) holding two stacked layers:
@@ -897,15 +949,28 @@ body.cornell-printing
   z-index: 0;
 }
 
-/* Native preview — in front, opaque, scrollable. Renders the Cornell grid with
- * the plugin's own layout CSS (the `.cornell-note .cornell-grid` rules). */
-.cornell-pdf-preview-native {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: auto;
-  background: var(--background-primary);
+/* Each note's preview — a paper-white sheet rendering the Cornell grid with the
+ * plugin's own layout CSS (the `.cornell-note .cornell-grid` rules). The light
+ * palette is forced (matching the exported PDF) so the preview reads the same in
+ * any theme and dark-mode colors don't bleed in. Sheets stack vertically in the
+ * scrollable preview surface. */
+.cornell-pdf-preview-sheet {
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
   padding: 16px;
+  margin-bottom: 16px;
+  --background-primary: #ffffff;
+  --background-primary-alt: #ffffff;
+  --background-secondary: #f6f6f6;
+  --background-secondary-alt: #efefef;
+  --text-normal: #1a1a1a;
+  --text-muted: #444444;
+  --text-faint: #6a6a6a;
+}
+.cornell-pdf-preview-sheet:last-child {
+  margin-bottom: 0;
 }
 
 .cornell-pdf-export-status {
