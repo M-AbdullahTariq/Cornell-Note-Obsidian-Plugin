@@ -16,18 +16,33 @@
 // Preview / capture technique adapted from l1xnan/obsidian-better-export-pdf
 // (MIT); see README credits.
 
-import { ButtonComponent, Modal, Notice, TFile } from "obsidian";
+import { ButtonComponent, Modal, Notice, TFile, TFolder } from "obsidian";
 import type CornellNotesPlugin from "./main";
 import {
   PAGE_SIZES,
   PageSize,
   PrintWebview,
   bodyClassForExport,
+  buildCombinedExportBody,
+  buildExportBody,
   prepareExportWebview,
   printPreparedWebview,
   renderCornellExportGrid,
+  resolveCombinedOutputPath,
   resolvePdfOutputPath,
 } from "./pdfExport";
+
+type OutputMode = "separate" | "combined";
+
+/** Tally returned by an export run. `exported` is the count of notes written
+ *  (PDFs in separate mode, notes included in combined mode); `failed` lists the
+ *  basenames that could not be rendered/written; `wrote` is whether any output
+ *  file was produced. */
+interface ExportSummary {
+  exported: number;
+  failed: string[];
+  wrote: boolean;
+}
 
 export class CornellPdfExportModal extends Modal {
   private readonly plugin: CornellNotesPlugin;
@@ -35,6 +50,13 @@ export class CornellPdfExportModal extends Modal {
   /** The notes currently ticked for export. Seeded with every in-scope note. */
   private readonly checked: Set<TFile>;
   private pageSize: PageSize;
+  private outputMode: OutputMode = "separate";
+  /** Combined-mode output target — a file name (extension optional) and a vault
+   *  folder path ("/" = root). Only used when `outputMode === "combined"`. */
+  private combinedName = "Cornell Notes";
+  private combinedFolder = "/";
+  /** The combined-only inputs row, shown/hidden with the output mode. */
+  private combinedRow: HTMLElement | null = null;
 
   private renderBtn: ButtonComponent | null = null;
   private exportBtn: ButtonComponent | null = null;
@@ -76,6 +98,48 @@ export class CornellPdfExportModal extends Modal {
       this.plugin.settings.pdfPageSize = this.pageSize;
       void this.plugin.saveSettings();
     });
+
+    // Output mode — one PDF per note, or a single combined PDF.
+    const modeLabel = controls.createEl("label", { text: "Output" });
+    modeLabel.addClass("cornell-pdf-export-label");
+    const modeSelect = modeLabel.createEl("select");
+    modeSelect.createEl("option", {
+      text: "One PDF per note",
+      value: "separate",
+    });
+    modeSelect.createEl("option", { text: "Combined PDF", value: "combined" });
+    modeSelect.value = this.outputMode;
+    modeSelect.addEventListener("change", () => {
+      this.outputMode = modeSelect.value as OutputMode;
+      this.combinedRow?.classList.toggle(
+        "cornell-pdf-hidden",
+        this.outputMode !== "combined"
+      );
+    });
+
+    // Combined-only inputs: file name + target folder (shown only in combined).
+    this.combinedRow = contentEl.createDiv({ cls: "cornell-pdf-combined-row" });
+    const nameLabel = this.combinedRow.createEl("label", { text: "File name" });
+    nameLabel.addClass("cornell-pdf-export-label");
+    const nameInput = nameLabel.createEl("input", { type: "text" });
+    nameInput.value = this.combinedName;
+    nameInput.addEventListener("input", () => {
+      this.combinedName = nameInput.value;
+    });
+    const folderLabel = this.combinedRow.createEl("label", { text: "Folder" });
+    folderLabel.addClass("cornell-pdf-export-label");
+    const folderSelect = folderLabel.createEl("select");
+    this.folderOptions().forEach((opt) => {
+      folderSelect.createEl("option", { text: opt.label, value: opt.value });
+    });
+    folderSelect.value = this.combinedFolder;
+    folderSelect.addEventListener("change", () => {
+      this.combinedFolder = folderSelect.value;
+    });
+    this.combinedRow.classList.toggle(
+      "cornell-pdf-hidden",
+      this.outputMode !== "combined"
+    );
 
     // Selection header with select-all / select-none.
     const selHeader = contentEl.createDiv({
@@ -214,9 +278,21 @@ export class CornellPdfExportModal extends Modal {
     status.remove();
   }
 
-  /** Export every checked note to `<note>.pdf` beside its source, one at a time
-   *  through a reused on-screen capture webview. A note that fails is skipped and
-   *  the rest still export; a summary notice reports successes and failures. */
+  /** Vault folders for the combined-mode target dropdown — root first, then every
+   *  folder by path. Root is shown as "(vault root)" and stored as "/". */
+  private folderOptions(): { value: string; label: string }[] {
+    const byPath = new Map<string, string>([["/", "(vault root)"]]);
+    this.app.vault.getAllLoadedFiles().forEach((f) => {
+      if (f instanceof TFolder && !f.isRoot()) byPath.set(f.path, f.path);
+    });
+    return Array.from(byPath, ([value, label]) => ({ value, label })).sort(
+      (a, b) => a.label.localeCompare(b.label)
+    );
+  }
+
+  /** Export the checked notes, branching on the output mode, with one shared
+   *  on-screen capture host. Tears the host down and reports a summary either
+   *  way; a clean run closes the modal, any failure keeps it open for retry. */
   private async runExport(): Promise<void> {
     if (this.exporting) return;
     const files = this.selectedFiles();
@@ -231,12 +307,33 @@ export class CornellPdfExportModal extends Modal {
 
     // Body-level on-screen capture host positioned over the preview surface, so
     // the webview is laid out and painted (Electron throttles off-screen ones).
-    this.captureHost = activeDocument.body.createDiv({
-      cls: "cornell-pdf-export-host",
-    });
+    const host = activeDocument.body.createDiv({ cls: "cornell-pdf-export-host" });
+    this.captureHost = host;
     this.positionCaptureHost();
     const bodyClass = bodyClassForExport(activeDocument);
 
+    let summary: ExportSummary;
+    try {
+      summary =
+        this.outputMode === "combined"
+          ? await this.exportCombined(files, host, bodyClass)
+          : await this.exportSeparate(files, host, bodyClass);
+    } finally {
+      this.captureHost?.remove();
+      this.captureHost = null;
+      this.exporting = false;
+    }
+
+    this.reportExport(files.length, summary);
+  }
+
+  /** One PDF per note, beside each source, captured one at a time through the
+   *  shared host. A note that fails is skipped; the rest still export. */
+  private async exportSeparate(
+    files: TFile[],
+    host: HTMLElement,
+    bodyClass: string
+  ): Promise<ExportSummary> {
     const failed: string[] = [];
     let exported = 0;
     for (const file of files) {
@@ -245,8 +342,8 @@ export class CornellPdfExportModal extends Modal {
         const { grid, dispose } = await renderCornellExportGrid(this.app, file);
         const gridHtml = grid.outerHTML;
         dispose();
-        webview = await prepareExportWebview(this.captureHost, {
-          gridHtml,
+        webview = await prepareExportWebview(host, {
+          bodyHtml: buildExportBody(gridHtml),
           bodyClass,
         });
         const bytes = await printPreparedWebview(webview, this.pageSize);
@@ -262,23 +359,70 @@ export class CornellPdfExportModal extends Modal {
         webview?.remove();
       }
     }
+    return { exported, failed, wrote: exported > 0 };
+  }
 
-    this.captureHost.remove();
-    this.captureHost = null;
-    this.exporting = false;
+  /** All selected notes merged into one PDF (each note on a fresh page), written
+   *  to the combined name + folder. Notes that fail to render are skipped; the
+   *  combined file is still written from the rest. `exported` is the number of
+   *  notes included in the file. */
+  private async exportCombined(
+    files: TFile[],
+    host: HTMLElement,
+    bodyClass: string
+  ): Promise<ExportSummary> {
+    const failed: string[] = [];
+    const gridHtmls: string[] = [];
+    for (const file of files) {
+      try {
+        const { grid, dispose } = await renderCornellExportGrid(this.app, file);
+        gridHtmls.push(grid.outerHTML);
+        dispose();
+      } catch (e) {
+        console.error(`Cornell PDF render failed for ${file.path}`, e);
+        failed.push(file.basename);
+      }
+    }
+    if (gridHtmls.length === 0) return { exported: 0, failed, wrote: false };
 
-    if (failed.length === 0) {
-      new Notice(
-        exported === 1
-          ? "Exported 1 PDF."
-          : `Exported ${exported} PDFs.`
+    let webview: PrintWebview | null = null;
+    try {
+      webview = await prepareExportWebview(host, {
+        bodyHtml: buildCombinedExportBody(gridHtmls),
+        bodyClass,
+      });
+      const bytes = await printPreparedWebview(webview, this.pageSize);
+      await this.app.vault.adapter.writeBinary(
+        resolveCombinedOutputPath(this.combinedFolder, this.combinedName),
+        bytes
       );
+      return { exported: gridHtmls.length, failed, wrote: true };
+    } finally {
+      webview?.remove();
+    }
+  }
+
+  /** Notice + close policy shared by both modes: a clean run closes the modal;
+   *  any failure (or nothing written) keeps it open so the user can retry. */
+  private reportExport(total: number, summary: ExportSummary): void {
+    const { exported, failed, wrote } = summary;
+    if (!wrote) {
+      new Notice("Nothing exported — no notes could be rendered.");
+    } else if (failed.length === 0) {
+      const what =
+        this.outputMode === "combined"
+          ? `combined PDF (${exported} note${exported === 1 ? "" : "s"})`
+          : exported === 1
+          ? "1 PDF"
+          : `${exported} PDFs`;
+      new Notice(`Exported ${what}.`);
       this.close();
       return;
+    } else {
+      new Notice(
+        `Exported ${exported} of ${total}. Failed: ${failed.join(", ")}.`
+      );
     }
-    new Notice(
-      `Exported ${exported} of ${files.length}. Failed: ${failed.join(", ")}.`
-    );
     this.exportBtn?.setButtonText("Export");
     this.updateButtons();
   }

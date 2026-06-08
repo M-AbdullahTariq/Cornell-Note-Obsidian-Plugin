@@ -274,8 +274,19 @@ function collectAppStyles(doc: Document): string {
  *  so tagging it up-front would make the on-screen preview blank. Instead it's
  *  toggled on transiently by `printPreparedWebview`, right before capture, so
  *  the preview shows content AND the PDF (print emulation) reveals it. */
-function buildExportBody(gridHtml: string): string {
+export function buildExportBody(gridHtml: string): string {
   return `<div class="${HOLDER_CLASS} cornell-note markdown-preview-view markdown-rendered">${gridHtml}</div>`;
+}
+
+/** Body markup for a COMBINED export: every selected note's grid stacked under a
+ *  single holder, in selection order. Each grid is a `.cornell-grid` sibling, so
+ *  the stylesheet's "page break between consecutive grids" rule starts each note
+ *  on a fresh sheet (the first has no break). Same holder classes as the
+ *  single-note body, so the light palette and grid layout apply identically. */
+export function buildCombinedExportBody(gridHtmls: string[]): string {
+  return `<div class="${HOLDER_CLASS} cornell-note markdown-preview-view markdown-rendered">${gridHtmls.join(
+    ""
+  )}</div>`;
 }
 
 /** Patch injected into the webview. Two jobs:
@@ -371,7 +382,7 @@ export function bodyClassForExport(doc: Document): string {
  *  prints blank); the caller owns `host` and its visibility/cleanup. */
 export async function prepareExportWebview(
   host: HTMLElement,
-  options: { gridHtml: string; bodyClass: string }
+  options: { bodyHtml: string; bodyClass: string }
 ): Promise<PrintWebview> {
   const doc = activeDocument;
   const win = activeWindow;
@@ -395,7 +406,7 @@ export async function prepareExportWebview(
           win.clearTimeout(timer);
           await webview.insertCSS(collectAppStyles(doc));
           await webview.executeJavaScript(
-            buildSetupScript(buildExportBody(options.gridHtml), options.bodyClass)
+            buildSetupScript(options.bodyHtml, options.bodyClass)
           );
           // Patch print media LAST so it wins over app print rules.
           await webview.insertCSS(PRINT_PATCH);

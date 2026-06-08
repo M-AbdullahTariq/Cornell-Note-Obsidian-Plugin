@@ -824,6 +824,16 @@ body.cornell-printing
   page-break-before: always;
 }
 
+/* Combined export: each selected note is its own `.cornell-grid` stacked under
+ * the holder, so every grid after the first starts on a fresh page. */
+body.cornell-printing
+  .cornell-pdf-export-holder
+  > .cornell-grid
+  ~ .cornell-grid {
+  break-before: page;
+  page-break-before: always;
+}
+
 /* Avoid splitting a cue or a notes block across a page edge where possible. */
 body.cornell-printing
   :is(.markdown-preview-sizer, .cornell-grid)
@@ -922,6 +932,21 @@ body.cornell-printing
 }
 .cornell-pdf-export-error {
   color: var(--text-error);
+}
+
+/* Combined-mode inputs (file name + target folder), shown only when the output
+ * mode is "Combined PDF". */
+.cornell-pdf-combined-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.cornell-pdf-combined-row input[type="text"] {
+  min-width: 200px;
+}
+.cornell-pdf-hidden {
+  display: none !important;
 }
 
 /* Body-level host (positioned over the slot above) holding two stacked layers:
