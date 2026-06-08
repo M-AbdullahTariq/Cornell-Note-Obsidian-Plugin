@@ -299,7 +299,7 @@ export default class CornellNotesPlugin extends Plugin {
         if (!hasCornellCssClass(cache?.frontmatter)) return;
         menu.addItem((item) =>
           item
-            .setTitle("Export Cornell note to PDF")
+            .setTitle("Export cornell note to PDF")
             .setIcon("file-text")
             .onClick(() => new CornellPdfExportModal(this, file).open())
         );
@@ -316,13 +316,13 @@ export default class CornellNotesPlugin extends Plugin {
     }
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
-      new Notice("Open a Cornell note to export it to PDF.");
+      new Notice("Open a cornell note to export it to PDF.");
       return;
     }
     const cache = this.app.metadataCache.getFileCache(file);
     if (!hasCornellCssClass(cache?.frontmatter)) {
       new Notice(
-        "This note is not a Cornell note (add the cornell-note cssclass)."
+        "This note is not a cornell note (add the cornell-note cssclass)."
       );
       return;
     }

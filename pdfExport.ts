@@ -21,7 +21,6 @@ import {
   Component,
   MarkdownRenderer,
   normalizePath,
-  Notice,
   TFile,
 } from "obsidian";
 import { leadsWithTitle } from "./classifier";
@@ -224,22 +223,6 @@ function buildSetupScript(bodyHtml: string, bodyClass: string): string {
   `;
 }
 
-/** Render the active Cornell note to the grid HTML used for export: build the
- *  printable markdown, render it into an off-screen container, stamp slot roles,
- *  and return the grid's `outerHTML`. The container only exists to host the
- *  render and is always cleaned up. Throws if the markdown render fails. */
-export async function renderCornellExportHtml(
-  app: App,
-  file: TFile
-): Promise<string> {
-  const { grid, dispose } = await renderCornellExportGrid(app, file);
-  try {
-    return grid.outerHTML;
-  } finally {
-    dispose();
-  }
-}
-
 /** Render the Cornell note into an off-screen, slot-stamped grid element and
  *  return it live, along with a `dispose()` that unloads the render component
  *  and removes the off-screen host. The element stays mounted in the host until
@@ -381,63 +364,5 @@ export async function printPreparedWebview(
     ) as ArrayBuffer;
   } finally {
     await toggle(false);
-  }
-}
-
-/** Render the active Cornell note, then print it to `<note>.pdf` via an isolated
- *  <webview> we fully control (own theme, own CSS, no app chrome). Orchestrates
- *  the extracted steps behind a transient "Generating PDF…" overlay that keeps
- *  the webview on-screen during capture. Desktop only; the caller guards mobile.
- *  (Phase 3 replaces this overlay with a preview modal that reuses the same
- *  render / prepare / print seams.) */
-export async function exportCornellNoteToPdf(
-  app: App,
-  file: TFile,
-  pageSize: PageSize = "A4"
-): Promise<void> {
-  const doc = activeDocument;
-
-  let gridHtml: string;
-  try {
-    gridHtml = await renderCornellExportHtml(app, file);
-  } catch (e) {
-    new Notice(`Could not render note for PDF export: ${String(e)}`);
-    return;
-  }
-
-  // Visible "Generating PDF…" overlay holding the webview. On-screen so Electron
-  // lays out + paints it.
-  const overlay = doc.body.createDiv();
-  overlay.setAttribute(
-    "style",
-    "position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;" +
-      "align-items:center;justify-content:center;gap:8px;" +
-      "background:rgba(0,0,0,0.4);"
-  );
-  const caption = overlay.createDiv({ text: "Generating PDF…" });
-  caption.setAttribute(
-    "style",
-    "color:#fff;font-size:14px;font-family:var(--font-interface,sans-serif);"
-  );
-  const frame = overlay.createDiv();
-  frame.setAttribute(
-    "style",
-    "width:800px;height:520px;background:#fff;overflow:hidden;" +
-      "box-shadow:0 4px 24px rgba(0,0,0,0.5);"
-  );
-
-  try {
-    const webview = await prepareExportWebview(frame, {
-      gridHtml,
-      bodyClass: bodyClassForExport(doc),
-    });
-    const bytes = await printPreparedWebview(webview, pageSize);
-    const outPath = resolvePdfOutputPath(file);
-    await app.vault.adapter.writeBinary(outPath, bytes);
-    new Notice(`Exported PDF: ${outPath}`);
-  } catch (e) {
-    new Notice(`PDF export failed: ${String(e)}`);
-  } finally {
-    overlay.remove();
   }
 }

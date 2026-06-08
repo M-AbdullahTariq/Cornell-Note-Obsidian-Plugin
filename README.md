@@ -124,6 +124,7 @@ The three shortcut trigger words must differ from one another; the settings reje
 | Create new Cornell note | Creates a pre-filled Cornell note in the current folder. |
 | Toggle review mode | Turns the active-recall study mode on/off for all Cornell notes (Reading view). |
 | Reset review reveals (re-blur all) | Re-hides every revealed region without leaving review mode. |
+| Export note to PDF | Opens a preview modal (A4/Letter page size, remembered between exports) and writes `<note>.pdf` next to the note, reproducing the Reading-view Cornell layout on a light, paper-like sheet. Desktop only; also available from the note's right-click menu. |
 
 ## Architecture
 
@@ -131,7 +132,9 @@ The three shortcut trigger words must differ from one another; the settings reje
 - `livePreview.ts` — CodeMirror `ViewPlugin` that maps slots to line decorations on title / cue / summary / body / gap source lines, plus `resolveExpansion` (pure) backing the cue/summary/title auto-expand shortcuts.
 - `reviewMode.ts` — `ReviewModeController`: owns the global, ephemeral review-mode on/off state, toggles the `cornell-review` class on Reading-view sizers, handles cue/summary clicks to reveal/hide a group, tracks revealed groups per file (so reveals survive re-renders), and resets reveals. DOM glue verified manually in Obsidian.
 - `main.ts` — plugin entry. Registers the editor extension, the Reading-view post-processor (which stamps `data-cornell-slot`, the review markers `data-cornell-cue-group`/`data-cornell-review-blur`, and re-applies persisted reveals; toggles `cornell-leading-title` on the sizer), the settings tab, the review-mode commands + click listener, and listens for metadata changes.
-- `settings.ts` — settings interface + tab UI, including the three callout shortcuts and the pure `findDuplicateTrigger` validator that keeps their trigger words distinct.
+- `settings.ts` — settings interface + tab UI, including the three callout shortcuts and the pure `findDuplicateTrigger` validator that keeps their trigger words distinct, plus the remembered PDF page size.
+- `pdfExport.ts` — PDF export internals. Renders the note's printable markdown into an off-screen, slot-stamped grid (`renderCornellExportGrid`), and drives an isolated Electron `<webview>` that injects the app + plugin CSS on a forced light palette (`prepareExportWebview`) and captures it with `printToPDF` (`printPreparedWebview`). Pure helpers cover page-size → print options and the output path.
+- `pdfExportModal.ts` — `CornellPdfExportModal`: the preview-and-export modal. The visible preview is native in-app DOM (so it always paints); a `<webview>` behind it is used only for the PDF capture, keeping preview and capture decoupled.
 - `styles.css` — visual layout. Reading view places blocks by their `data-cornell-slot` attribute; the title is centered full-width and a `--cornell-page-gap` of whitespace separates stacked pages. Review mode blurs `data-cornell-review-blur` wrappers under a `cornell-review` sizer until they're `data-cornell-revealed`. CSS variables (`--cue-width`, `--cue-line-color`, `--cue-line-thickness`) are written to `:root` by the plugin so settings updates re-flow the page without restyling.
 - `tests/` — `node:test` fixtures over the pure classifier; run with `npm test`.
 
@@ -143,6 +146,37 @@ npm run build
 ```
 
 Produces `main.js`. The plugin folder is symlinked into the vault's `.obsidian/plugins/cornell-notes`.
+
+## Acknowledgements
+
+The PDF export's render-and-capture approach — rendering the note into an
+isolated Electron `<webview>` and writing the page with `printToPDF` — was
+adapted from [obsidian-better-export-pdf](https://github.com/l1xnan/obsidian-better-export-pdf)
+by l1xnan, used under the MIT License:
+
+```
+MIT License
+
+Copyright (c) 2023 l1xnan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## License
 
