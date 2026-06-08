@@ -13,11 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   export. A modal lists the in-scope notes (a folder includes every Cornell
   note beneath it, so right-clicking the vault root is the "export all" path),
   with checkboxes to choose which to include and a Render-preview button that
-  shows the selected notes as paper-like sheets before exporting. Pick any of
-  11 page sizes (A0–A6, Legal, Letter, Tabloid, Ledger, remembered between
-  exports), and export as **one PDF per note** (written next to each note) or a
-  single **combined PDF** with each note on a fresh page, written to a file
-  name and folder you choose. Every sheet shows the file name as its title and
+  shows the selected notes as paper-like sheets before exporting. For multiple
+  notes, export as **one PDF per note** (written next to each note) or a single
+  **combined PDF** with each note on a fresh page, written to a file name and
+  folder you choose. Every sheet is A4, shows the file name as its title, and
   reproduces the Reading-view layout (cue column, divider, summary band) on a
   light, paper-like background; review-mode blur never carries into the export.
   Desktop only.

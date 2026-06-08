@@ -129,17 +129,16 @@ The three shortcut trigger words must differ from one another; the settings reje
 
 Export is driven entirely from the **right-click menu** (desktop only):
 
-- **A single note** — right-click a Cornell note in the file explorer → **Export to PDF**.
-- **A folder of notes** — right-click a folder → **Export cornell notes to PDF**. Every Cornell note beneath it (subfolders included) is listed, so right-clicking the vault root is the "export all Cornell notes" path.
+- **A single note** — right-click a Cornell note in the file explorer → **Export PDF**.
+- **A folder of notes** — right-click a folder → **Export to PDFs**. Every Cornell note beneath it (subfolders included) is listed, so right-clicking the vault root is the "export all Cornell notes" path.
 
 Either opens a modal where you:
 
 - **Choose which notes** to include with checkboxes (Select all / Select none).
-- **Pick a page size** — A0–A6, Legal, Letter, Tabloid, or Ledger — remembered between exports.
-- **Pick the output** — one PDF per note (written next to each note), or a single **combined PDF** with each note on a fresh page, written to a file name and folder you choose.
+- **Pick the output** (multi-note only) — one PDF per note (written next to each note), or a single **combined PDF** with each note on a fresh page, written to a file name and folder you choose.
 - **Render a preview** on demand — the selected notes render as paper-like sheets you can scroll through before exporting.
 
-Each exported sheet shows the file name as its title and reproduces the Reading-view Cornell layout (cue column, divider, summary band) on a light, paper-like background. Review-mode blur never carries into the export. A note that fails to render is skipped and reported, so one bad note never sinks a batch.
+Exports are always A4. Each exported sheet shows the file name as its title and reproduces the Reading-view Cornell layout (cue column, divider, summary band) on a light, paper-like background. Review-mode blur never carries into the export. A note that fails to render is skipped and reported, so one bad note never sinks a batch.
 
 ## Architecture
 
@@ -147,8 +146,8 @@ Each exported sheet shows the file name as its title and reproduces the Reading-
 - `livePreview.ts` — CodeMirror `ViewPlugin` that maps slots to line decorations on title / cue / summary / body / gap source lines, plus `resolveExpansion` (pure) backing the cue/summary/title auto-expand shortcuts.
 - `reviewMode.ts` — `ReviewModeController`: owns the global, ephemeral review-mode on/off state, toggles the `cornell-review` class on Reading-view sizers, handles cue/summary clicks to reveal/hide a group, tracks revealed groups per file (so reveals survive re-renders), and resets reveals. DOM glue verified manually in Obsidian.
 - `main.ts` — plugin entry. Registers the editor extension, the Reading-view post-processor (which stamps `data-cornell-slot`, the review markers `data-cornell-cue-group`/`data-cornell-review-blur`, and re-applies persisted reveals; toggles `cornell-leading-title` on the sizer), the settings tab, the review-mode commands + click listener, and listens for metadata changes.
-- `settings.ts` — settings interface + tab UI, including the three callout shortcuts and the pure `findDuplicateTrigger` validator that keeps their trigger words distinct, plus the remembered PDF page size.
-- `pdfExport.ts` — PDF export internals. Renders a note's printable markdown — always prefixed with the file name as a `> [!title]` — into an off-screen, slot-stamped grid (`renderCornellExportGrid`), and drives an isolated Electron `<webview>` that injects the app + plugin CSS on a forced light palette (`prepareExportWebview`) and captures it with `printToPDF` (`printPreparedWebview`); a combined export stacks several notes' grids in one document (`buildCombinedExportBody`). Pure helpers cover the 11 page sizes → print options, the per-note and combined output paths, and collecting a folder's Cornell-note descendants (`descendantMarkdownFiles` / `collectCornellNotes`).
+- `settings.ts` — settings interface + tab UI, including the three callout shortcuts and the pure `findDuplicateTrigger` validator that keeps their trigger words distinct.
+- `pdfExport.ts` — PDF export internals. Renders a note's printable markdown — always prefixed with the file name as a `> [!title]` — into an off-screen, slot-stamped grid (`renderCornellExportGrid`), and drives an isolated Electron `<webview>` that injects the app + plugin CSS on a forced light palette (`prepareExportWebview`) and captures it to A4 with `printToPDF` (`printPreparedWebview`); a combined export stacks several notes' grids in one document (`buildCombinedExportBody`). Pure helpers cover the per-note and combined output paths and collecting a folder's Cornell-note descendants (`descendantMarkdownFiles` / `collectCornellNotes`).
 - `pdfExportModal.ts` — `CornellPdfExportModal`: the multi-note export modal. Lists the in-scope Cornell notes with checkboxes, renders the checked ones into a scrollable preview of native in-app DOM (so it always paints), and on export captures each note through a single reused `<webview>` — one PDF per note, or one combined PDF — keeping preview and capture decoupled.
 - `styles.css` — visual layout. Reading view places blocks by their `data-cornell-slot` attribute; the title is centered full-width and a `--cornell-page-gap` of whitespace separates stacked pages. Review mode blurs `data-cornell-review-blur` wrappers under a `cornell-review` sizer until they're `data-cornell-revealed`. CSS variables (`--cue-width`, `--cue-line-color`, `--cue-line-thickness`) are written to `:root` by the plugin so settings updates re-flow the page without restyling.
 - `tests/` — `node:test` fixtures over the pure classifier; run with `npm test`.

@@ -19,8 +19,6 @@
 import { ButtonComponent, Modal, Notice, TFile, TFolder } from "obsidian";
 import type CornellNotesPlugin from "./main";
 import {
-  PAGE_SIZES,
-  PageSize,
   PrintWebview,
   bodyClassForExport,
   buildCombinedExportBody,
@@ -49,7 +47,6 @@ export class CornellPdfExportModal extends Modal {
   private readonly files: TFile[];
   /** The notes currently ticked for export. Seeded with every in-scope note. */
   private readonly checked: Set<TFile>;
-  private pageSize: PageSize;
   private outputMode: OutputMode = "separate";
   /** Combined-mode output target — a file name (extension optional) and a vault
    *  folder path ("/" = root). Only used when `outputMode === "combined"`. */
@@ -74,7 +71,6 @@ export class CornellPdfExportModal extends Modal {
     this.plugin = plugin;
     this.files = files;
     this.checked = new Set(files);
-    this.pageSize = plugin.settings.pdfPageSize;
   }
 
   onOpen(): void {
@@ -84,26 +80,15 @@ export class CornellPdfExportModal extends Modal {
       this.files.length === 1 ? "Export note to PDF" : "Export notes to PDF"
     );
 
-    // Page size selector — defaults to the persisted choice, writes it back.
-    const controls = contentEl.createDiv({ cls: "cornell-pdf-export-controls" });
-    const sizeLabel = controls.createEl("label", { text: "Page size" });
-    sizeLabel.addClass("cornell-pdf-export-label");
-    const select = sizeLabel.createEl("select");
-    PAGE_SIZES.forEach((size) => {
-      select.createEl("option", { text: size, value: size });
-    });
-    select.value = this.pageSize;
-    select.addEventListener("change", () => {
-      this.pageSize = select.value as PageSize;
-      this.plugin.settings.pdfPageSize = this.pageSize;
-      void this.plugin.saveSettings();
-    });
-
-    // Output mode + combined options exist ONLY for a multi-note export — a
-    // single note has nothing to combine, so it always exports one PDF beside
-    // the note (outputMode stays "separate"). Showing the toggle for one note
-    // would be meaningless clutter.
+    // Cornell PDFs are always A4 — no page-size control. The output-mode toggle
+    // and combined options exist ONLY for a multi-note export: a single note has
+    // nothing to combine, so it always exports one PDF beside the note
+    // (outputMode stays "separate"). Showing the toggle for one note would be
+    // meaningless clutter.
     if (this.files.length > 1) {
+      const controls = contentEl.createDiv({
+        cls: "cornell-pdf-export-controls",
+      });
       // Output mode — one PDF per note, or a single combined PDF.
       const modeLabel = controls.createEl("label", { text: "Output" });
       modeLabel.addClass("cornell-pdf-export-label");
@@ -352,7 +337,7 @@ export class CornellPdfExportModal extends Modal {
           bodyHtml: buildExportBody(gridHtml),
           bodyClass,
         });
-        const bytes = await printPreparedWebview(webview, this.pageSize);
+        const bytes = await printPreparedWebview(webview);
         await this.app.vault.adapter.writeBinary(
           resolvePdfOutputPath(file),
           bytes
@@ -397,7 +382,7 @@ export class CornellPdfExportModal extends Modal {
         bodyHtml: buildCombinedExportBody(gridHtmls),
         bodyClass,
       });
-      const bytes = await printPreparedWebview(webview, this.pageSize);
+      const bytes = await printPreparedWebview(webview);
       await this.app.vault.adapter.writeBinary(
         resolveCombinedOutputPath(this.combinedFolder, this.combinedName),
         bytes

@@ -127,66 +127,14 @@ export function buildPrintableMarkdown(source: string, basename: string): string
 
 const HOLDER_CLASS = "cornell-pdf-export-holder";
 
-/** The paper sizes offered for export — the full set from
- *  l1xnan/obsidian-better-export-pdf. Order is the dropdown order. */
-export const PAGE_SIZES = [
-  "A0",
-  "A1",
-  "A2",
-  "A3",
-  "A4",
-  "A5",
-  "A6",
-  "Legal",
-  "Letter",
-  "Tabloid",
-  "Ledger",
-] as const;
-
-/** A paper size for export. Persisted in settings as the last-used. */
-export type PageSize = (typeof PAGE_SIZES)[number];
-
-/** Page dimensions in millimetres `[width, height]`. Source: l1xnan/
- *  obsidian-better-export-pdf `constant.ts`. Ledger is landscape (432×279). */
-const PAGE_SIZE_MM: Record<PageSize, [number, number]> = {
-  A0: [841, 1189],
-  A1: [594, 841],
-  A2: [420, 594],
-  A3: [297, 420],
-  A4: [210, 297],
-  A5: [148, 210],
-  A6: [105, 148],
-  Legal: [216, 356],
-  Letter: [216, 279],
-  Tabloid: [279, 432],
-  Ledger: [432, 279],
+/** Electron `printToPDF` options for a Cornell PDF — always A4. The dimensions
+ *  are passed explicitly in inches (210×297 mm ÷ 25.4) rather than the named "A4"
+ *  size, so they apply regardless of how Electron resolves the named size.
+ *  `printBackground` keeps the divider lines/colors without any user toggle. */
+const A4_PRINT_OPTIONS: Record<string, unknown> = {
+  printBackground: true,
+  pageSize: { width: 210 / 25.4, height: 297 / 25.4 },
 };
-
-const MM_PER_INCH = 25.4;
-
-/** Coerce an arbitrary persisted value to a valid `PageSize`, falling back to A4.
- *  Lets settings widen the union without a migration: an old or unknown saved
- *  value (or a future size that was removed) resolves to the default. */
-export function normalizePageSize(value: unknown): PageSize {
-  return (PAGE_SIZES as readonly string[]).includes(value as string)
-    ? (value as PageSize)
-    : "A4";
-}
-
-/** Pure: the Electron `printToPDF` options for a page size. Dimensions are passed
- *  explicitly in inches (mm ÷ 25.4) rather than by Electron's named sizes, so all
- *  11 sizes — including ones Electron does not name reliably (Ledger, A0–A2, A6) —
- *  render at the correct dimensions. `printBackground` keeps divider lines/colors
- *  without any user toggle. */
-export function printOptionsForPageSize(
-  pageSize: PageSize
-): Record<string, unknown> {
-  const [w, h] = PAGE_SIZE_MM[pageSize];
-  return {
-    printBackground: true,
-    pageSize: { width: w / MM_PER_INCH, height: h / MM_PER_INCH },
-  };
-}
 
 /** Pure: where the exported PDF is written — `<note>.pdf` in the note's own
  *  folder (root folder → vault root). Mirrors the note's location so the PDF
@@ -441,8 +389,7 @@ export async function prepareExportWebview(
  *  off to reveal the content under print emulation — then removed so the
  *  on-screen preview (which Obsidian hides while `.print` is set) stays visible. */
 export async function printPreparedWebview(
-  webview: PrintWebview,
-  pageSize: PageSize
+  webview: PrintWebview
 ): Promise<ArrayBuffer> {
   const win = activeWindow;
   const toggle = (on: boolean): Promise<unknown> =>
@@ -456,7 +403,7 @@ export async function printPreparedWebview(
   // Let the print-class reflow settle before capture.
   await new Promise<void>((resolve) => win.setTimeout(resolve, 50));
   try {
-    const data = await webview.printToPDF(printOptionsForPageSize(pageSize));
+    const data = await webview.printToPDF(A4_PRINT_OPTIONS);
     return data.buffer.slice(
       data.byteOffset,
       data.byteOffset + data.byteLength

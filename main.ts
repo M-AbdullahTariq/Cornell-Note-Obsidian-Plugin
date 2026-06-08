@@ -17,7 +17,6 @@ import {
 import {
   collectCornellNotes,
   descendantMarkdownFiles,
-  normalizePageSize,
   stampExportHost,
 } from "./pdfExport";
 import { CornellPdfExportModal } from "./pdfExportModal";
@@ -344,8 +343,6 @@ export default class CornellNotesPlugin extends Plugin {
   async loadSettings() {
     const saved = (await this.loadData()) as Partial<CornellSettings> | null;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved ?? {});
-    // Widened page-size union: coerce an old/unknown saved value to a valid one.
-    this.settings.pdfPageSize = normalizePageSize(this.settings.pdfPageSize);
   }
 
   async saveSettings() {
