@@ -224,7 +224,7 @@
  * (no cue-column reservation below the rule).
  * ===================================================================== */
 
-.cornell-note .markdown-preview-sizer {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) {
   display: grid;
   grid-template-columns: var(--cue-width) var(--cue-gap) 1fr;
   align-items: start;
@@ -250,7 +250,7 @@
  * cue column, and their text wraps one character per line (the "vertical
  * title" bug). The cue and body rules below have higher specificity and
  * override this for their own wrappers. */
-.cornell-note .markdown-preview-sizer > * {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) >* {
   grid-column: 1 / -1;
 }
 
@@ -259,8 +259,8 @@
  * Obsidian's built-in inline (file-name) title, so only the explicit title is
  * shown. Without a leading title the flag is absent and the inline title stays
  * as the file-name fallback. */
-.cornell-note .markdown-preview-sizer.cornell-leading-title > .mod-header,
-.cornell-note .markdown-preview-sizer.cornell-leading-title .inline-title {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid).cornell-leading-title > .mod-header,
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid).cornell-leading-title .inline-title {
   display: none;
 }
 
@@ -271,7 +271,7 @@
  * unavailable) keeps the full-width default above, which degrades gracefully. */
 
 /* Cue → cue column. The callout inside renders in flow at the column edge. */
-.cornell-note .markdown-preview-sizer > [data-cornell-slot="cue"] {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) >[data-cornell-slot="cue"] {
   grid-column: 1;
 }
 
@@ -283,7 +283,7 @@
  * into ONE continuous divider line (paragraph → table → list, all connected).
  * Without stretch the border only spanned each block's own height, leaving the
  * gappy, fragmented line from the bug report. */
-.cornell-note .markdown-preview-sizer > [data-cornell-slot="body"] {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) >[data-cornell-slot="body"] {
   grid-column: 3;
   align-self: stretch;
   border-left: var(--cue-line);
@@ -296,8 +296,8 @@
  * stops here and resumes at the next cue's first body. The classifier flags
  * this block (Slot.notesEnd); interior blocks are unmarked and stay connected. */
 .cornell-note
-  .markdown-preview-sizer
-  > [data-cornell-slot="body"][data-cornell-notes-end] {
+  :is(.markdown-preview-sizer, .cornell-grid)
+  >[data-cornell-slot="body"][data-cornell-notes-end] {
   margin-bottom: var(--cue-gap);
 }
 
@@ -309,20 +309,20 @@
  * (one with an owning cue) carries the cue|notes divider, so the vertical line
  * runs unbroken through it. An orphan heading (before the first cue) sits in the
  * column with no divider segment, so the line never floats with no notes. */
-.cornell-note .markdown-preview-sizer > [data-cornell-slot="heading"] {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) >[data-cornell-slot="heading"] {
   grid-column: 3;
 }
 .cornell-note
-  .markdown-preview-sizer
-  > [data-cornell-slot="heading"][data-cornell-in-region] {
+  :is(.markdown-preview-sizer, .cornell-grid)
+  >[data-cornell-slot="heading"][data-cornell-in-region] {
   align-self: stretch;
   border-left: var(--cue-line);
   padding-left: 15px;
   margin: 0;
 }
 .cornell-note
-  .markdown-preview-sizer
-  > [data-cornell-slot="heading"][data-cornell-notes-end] {
+  :is(.markdown-preview-sizer, .cornell-grid)
+  >[data-cornell-slot="heading"][data-cornell-notes-end] {
   margin-bottom: var(--cue-gap);
 }
 
@@ -369,7 +369,7 @@
  * manual `---`. It reuses the divider's color/thickness (`--cue-line`), so
  * setting divider thickness to 0 hides this rule too (consistent: "no lines").
  * `--cue-gap` above and below the rule gives the band breathing room. */
-.cornell-note .markdown-preview-sizer > [data-cornell-slot="summary"] {
+.cornell-note :is(.markdown-preview-sizer, .cornell-grid) >[data-cornell-slot="summary"] {
   border-top: var(--cue-line);
   margin-top: var(--cue-gap);
   padding-top: var(--cue-gap);
@@ -380,8 +380,8 @@
  * sheets. The first title has no preceding title sibling and stays flush with
  * the top. Whitespace only — no drawn line. */
 .cornell-note
-  .markdown-preview-sizer
-  > [data-cornell-slot="title"]
+  :is(.markdown-preview-sizer, .cornell-grid)
+  >[data-cornell-slot="title"]
   ~ [data-cornell-slot="title"] {
   margin-top: var(--cornell-page-gap);
 }
@@ -760,4 +760,162 @@
   .cm-embed-block:has(.callout[data-callout="title"])
   ~ .cm-embed-block:has(.callout[data-callout="title"]) {
   margin-top: var(--cornell-page-gap) !important;
+}
+
+/* =====================================================================
+ * Export to PDF / print
+ *
+ * Obsidian's "Export to PDF" renders the note into a print container that is
+ * NOT the interactive `.markdown-preview-sizer`, and `ctx.getSectionInfo`
+ * returns null there. The post-processor handles the null case by stamping the
+ * grid host (which it tags `.cornell-grid`) and its children structurally, so
+ * the same `data-cornell-slot` layout rules above apply to the export DOM and
+ * the PDF reproduces the Reading-view Cornell layout. This block adds the
+ * paged-output tweaks on top of that shared layout.
+ * ===================================================================== */
+/* The "Export note to PDF" command builds this container, renders the Cornell
+ * layout into it, and prints it via Electron `printToPDF`. Off-screen by default
+ * so it's never visible during normal use; the command adds `cornell-printing`
+ * to <body> right before printing to reveal and isolate it. */
+.cornell-pdf-export-holder {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: 800px;
+}
+
+/* Export isolation — keyed off the `cornell-printing` state, NOT `@media print`.
+ * Electron's `printToPDF` does not reliably apply the print media type, so the
+ * rules that make the export work must apply unconditionally while the class is
+ * set. Hide all app chrome and bring the container on-screen as a white,
+ * paper-like sheet with dark text, so the PDF is legible whatever the theme. */
+body.cornell-printing > *:not(.cornell-pdf-export-holder) {
+  display: none !important;
+}
+body.cornell-printing .cornell-pdf-export-holder {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  width: auto !important;
+  min-height: 100vh;
+  padding: 24px !important;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #1a1a1a;
+  /* Force a light palette inside the export so themed (especially dark-mode)
+   * background/text colors don't bleed into the printed sheet. */
+  --background-primary: #ffffff;
+  --background-primary-alt: #ffffff;
+  --background-secondary: #f6f6f6;
+  --background-secondary-alt: #efefef;
+  --text-normal: #1a1a1a;
+  --text-muted: #444444;
+  --text-faint: #6a6a6a;
+}
+
+/* One Cornell page per printed sheet: every `>[!title]` preceded by an earlier
+ * title starts a fresh page. `break-before: page` is a no-op in continuous
+ * (screen) media and only takes effect when the export paginates. */
+body.cornell-printing
+  :is(.markdown-preview-sizer, .cornell-grid)
+  > [data-cornell-slot="title"]
+  ~ [data-cornell-slot="title"] {
+  break-before: page;
+  page-break-before: always;
+}
+
+/* Avoid splitting a cue or a notes block across a page edge where possible. */
+body.cornell-printing
+  :is(.markdown-preview-sizer, .cornell-grid)
+  > :is([data-cornell-slot="cue"], [data-cornell-slot="body"]) {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* A PDF is a finished study sheet — never carry review-mode blur into it. */
+body.cornell-printing [data-cornell-review-blur] > *,
+body.cornell-printing
+  [data-cornell-slot="summary"][data-cornell-review-blur]
+  .callout-content {
+  filter: none !important;
+  opacity: 1 !important;
+  user-select: auto !important;
+}
+
+/* =====================================================================
+ * Export-to-PDF preview modal (CornellPdfExportModal)
+ *
+ * A wider modal with a page-size selector, a live <webview> preview of the
+ * Cornell sheet, and Cancel / Export buttons. The preview surface is given an
+ * explicit size so the webview is laid out and painted (Electron throttles a
+ * zero-size or off-screen webview, which then prints blank).
+ * ===================================================================== */
+.cornell-pdf-export-modal {
+  width: min(900px, 92vw);
+}
+
+.cornell-pdf-export-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cornell-pdf-export-preview {
+  position: relative;
+  width: 100%;
+  height: 55vh;
+  min-height: 360px;
+  background: #fff;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Body-level host (positioned over the slot above) holding two stacked layers:
+ * a native-DOM preview on top (what the user sees) and the capture <webview>
+ * behind it. Body-level + above the modal so the webview stays on-screen and
+ * full-size (Electron throttles off-screen webviews) for printToPDF. The
+ * title/dropdown/buttons sit outside the slot region, so a higher z-index
+ * doesn't occlude them. */
+.cornell-pdf-export-host {
+  position: fixed;
+  z-index: calc(var(--layer-modal, 100) + 5);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* Capture webview — behind the native preview, filling the host. */
+.cornell-pdf-export-host webview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  z-index: 0;
+}
+
+/* Native preview — in front, opaque, scrollable. Renders the Cornell grid with
+ * the plugin's own layout CSS (the `.cornell-note .cornell-grid` rules). */
+.cornell-pdf-preview-native {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: auto;
+  background: var(--background-primary);
+  padding: 16px;
+}
+
+.cornell-pdf-export-status {
+  padding: 12px;
+  color: var(--text-muted);
+}
+
+.cornell-pdf-export-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
 }

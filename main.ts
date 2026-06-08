@@ -1,4 +1,11 @@
-import { MarkdownView, Notice, Plugin, TFile, TFolder } from "obsidian";
+import {
+  MarkdownView,
+  Notice,
+  Platform,
+  Plugin,
+  TFile,
+  TFolder,
+} from "obsidian";
 import { EditorView } from "@codemirror/view";
 import {
   classifySection,
@@ -7,6 +14,8 @@ import {
   leadsWithTitle,
   reviewBlurInfo,
 } from "./classifier";
+import { stampExportHost } from "./pdfExport";
+import { CornellPdfExportModal } from "./pdfExportModal";
 import {
   buildCornellEditorExtension,
   buildCalloutExpander,
@@ -47,15 +56,47 @@ More notes...
 > Write your summary here.
 `;
 
-/** Walk up from a rendered element to the `.markdown-preview-sizer`'s direct
- *  child — the element that becomes a grid item. Returns null if none is found
- *  (e.g. the element is detached), in which case the caller stamps `el` itself. */
-function sizerChild(el: HTMLElement): HTMLElement | null {
+/** Locate the Cornell grid host for a rendered element — the container whose
+ *  direct children are the note's top-level blocks and onto which the grid is
+ *  applied.
+ *
+ *  - Reading view / Live Preview: the `.markdown-preview-sizer`.
+ *  - Export to PDF / print: Obsidian renders into a different container (no
+ *    preview sizer). We anchor on a Cornell callout and climb to the block
+ *    whose parent is the rendered-markdown container, returning that parent.
+ *
+ *  The caller tags the host `.cornell-grid` so the layout stylesheet (which
+ *  matches `:is(.markdown-preview-sizer, .cornell-grid)`) applies in both. */
+function cornellHost(el: HTMLElement): HTMLElement | null {
+  const sizer = el.closest<HTMLElement>(".markdown-preview-sizer");
+  if (sizer) return sizer;
+  const CONTAINER = ".markdown-rendered, .markdown-preview-view, .print";
+  // The export render container — found from `el` whether it is the container
+  // itself, a block inside it, or (if Obsidian hands us a detached block) by
+  // searching the document. Falls back to `el` only as a last resort.
+  const scope =
+    el.closest<HTMLElement>(CONTAINER) ??
+    el.ownerDocument?.querySelector<HTMLElement>(CONTAINER) ??
+    el;
+  const anchor = scope.querySelector<HTMLElement>(
+    '.callout[data-callout="cue"], .callout[data-callout="title"], .callout[data-callout="summary"]'
+  );
+  if (!anchor) return null;
+  let block: HTMLElement = anchor;
+  while (block.parentElement && block.parentElement !== scope) {
+    block = block.parentElement;
+  }
+  return block.parentElement === scope ? scope : block.parentElement;
+}
+
+/** Walk up from a rendered element to the host's direct child — the element
+ *  that becomes a grid item. Returns null if `el` is not inside `host`. */
+function hostChild(el: HTMLElement, host: HTMLElement): HTMLElement | null {
   let e: HTMLElement | null = el;
-  while (e && !e.parentElement?.classList.contains("markdown-preview-sizer")) {
+  while (e && e.parentElement && e.parentElement !== host) {
     e = e.parentElement;
   }
-  return e;
+  return e && e.parentElement === host ? e : null;
 }
 
 export default class CornellNotesPlugin extends Plugin {
@@ -84,6 +125,12 @@ export default class CornellNotesPlugin extends Plugin {
       id: "reset-review-reveals",
       name: "Reset review reveals (re-blur all)",
       callback: () => this.reviewMode.resetReveals(),
+    });
+
+    this.addCommand({
+      id: "export-cornell-pdf",
+      name: "Export note to PDF",
+      callback: () => this.exportActiveNoteToPdf(),
     });
 
     // Click a cue (or the summary) in review mode to reveal/hide its region.
@@ -127,20 +174,23 @@ export default class CornellNotesPlugin extends Plugin {
 
       const source = await this.app.vault.cachedRead(file);
 
-      // Title fallback: when the file leads with a `>[!title]`, hide Obsidian's
-      // built-in inline (file-name) title so only the explicit title shows;
-      // otherwise leave it as the file-name fallback. The flag lives on the
-      // preview sizer — a stable ancestor of every block — and the toggle is
-      // idempotent across the per-block post-processor calls.
-      const sizer = el.closest(".markdown-preview-sizer");
-      if (sizer) {
-        sizer.classList.toggle(
+      // Find the grid host (preview sizer in the live views, or the export
+      // container during Export to PDF) and tag it `cornell-grid` so the layout
+      // stylesheet applies in both. Title fallback: when the file leads with a
+      // `>[!title]`, hide Obsidian's built-in inline (file-name) title so only
+      // the explicit title shows; otherwise leave it as the file-name fallback.
+      // The flag lives on the host — a stable ancestor of every block — and the
+      // toggle is idempotent across the per-block post-processor calls.
+      const host = cornellHost(el);
+      if (host) {
+        host.classList.add("cornell-grid");
+        host.classList.toggle(
           "cornell-leading-title",
           leadsWithTitle(source, cache?.frontmatter)
         );
-        // Reflect the global review-mode state onto this sizer so a freshly
+        // Reflect the global review-mode state onto this host so a freshly
         // rendered Cornell note matches it without waiting for a toggle.
-        this.reviewMode.syncSizer(sizer);
+        this.reviewMode.syncSizer(host);
       }
 
       // Resolve which slot this rendered block is by SOURCE POSITION rather
@@ -149,7 +199,14 @@ export default class CornellNotesPlugin extends Plugin {
       // section renders. A block with no section info (e.g. the inline title)
       // gets no attribute and falls back to the full-width default in CSS.
       const info = ctx.getSectionInfo(el);
-      if (!info) return;
+      if (!info) {
+        // Export to PDF / print: `getSectionInfo` returns null and there is no
+        // preview sizer, so the source-position path can't run. Stamp the whole
+        // host structurally from the rendered DOM instead, so the export
+        // reproduces the Reading-view layout. Idempotent across calls.
+        if (host) stampExportHost(host);
+        return;
+      }
 
       const resolved = classifySection(
         source,
@@ -167,7 +224,7 @@ export default class CornellNotesPlugin extends Plugin {
       // width; in-region headings additionally carry `data-cornell-in-region`,
       // which draws the cue|notes divider through them (orphan headings sit in
       // the column but draw no divider segment).
-      const wrapper = sizerChild(el) ?? el;
+      const wrapper = (host ? hostChild(el, host) : null) ?? el;
       wrapper.setAttribute(
         "data-cornell-slot",
         slot.isHeading ? "heading" : slot.role
@@ -231,6 +288,45 @@ export default class CornellNotesPlugin extends Plugin {
         this.refreshForFile(file);
       })
     );
+
+    // Discoverability: a right-click menu item on Cornell notes, alongside the
+    // command-palette command. Desktop only — Obsidian's print dialog is.
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        if (Platform.isMobile) return;
+        if (!(file instanceof TFile) || file.extension !== "md") return;
+        const cache = this.app.metadataCache.getFileCache(file);
+        if (!hasCornellCssClass(cache?.frontmatter)) return;
+        menu.addItem((item) =>
+          item
+            .setTitle("Export Cornell note to PDF")
+            .setIcon("file-text")
+            .onClick(() => new CornellPdfExportModal(this, file).open())
+        );
+      })
+    );
+  }
+
+  /** Command entry: validate the active note and export it to PDF, with a clear
+   *  notice for each reason it can't (mobile, no note, non-Cornell note). */
+  private exportActiveNoteToPdf(): void {
+    if (Platform.isMobile) {
+      new Notice("Cornell PDF export is desktop only.");
+      return;
+    }
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== "md") {
+      new Notice("Open a Cornell note to export it to PDF.");
+      return;
+    }
+    const cache = this.app.metadataCache.getFileCache(file);
+    if (!hasCornellCssClass(cache?.frontmatter)) {
+      new Notice(
+        "This note is not a Cornell note (add the cornell-note cssclass)."
+      );
+      return;
+    }
+    new CornellPdfExportModal(this, file).open();
   }
 
   onunload() {

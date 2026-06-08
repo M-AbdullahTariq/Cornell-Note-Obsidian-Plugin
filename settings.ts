@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type CornellNotesPlugin from "./main";
+import type { PageSize } from "./pdfExport";
 
 export interface CornellSettings {
   cueWidth: number;
@@ -21,6 +22,9 @@ export interface CornellSettings {
    *  colored box around it to signal it's clickable. Off by default — the
    *  pointer cursor is the only affordance unless the user opts in. */
   reviewHoverHighlight: boolean;
+  /** Last-used page size for "Export note to PDF". The export modal defaults to
+   *  this and writes it back on change, so the choice persists between exports. */
+  pdfPageSize: PageSize;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
@@ -31,6 +35,7 @@ export const DEFAULT_SETTINGS: CornellSettings = {
   summaryShortcut: "",
   titleShortcut: "",
   reviewHoverHighlight: false,
+  pdfPageSize: "A4",
 };
 
 /** The three shortcut trigger words, keyed by callout kind. */
