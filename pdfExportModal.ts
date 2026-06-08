@@ -99,47 +99,53 @@ export class CornellPdfExportModal extends Modal {
       void this.plugin.saveSettings();
     });
 
-    // Output mode — one PDF per note, or a single combined PDF.
-    const modeLabel = controls.createEl("label", { text: "Output" });
-    modeLabel.addClass("cornell-pdf-export-label");
-    const modeSelect = modeLabel.createEl("select");
-    modeSelect.createEl("option", {
-      text: "One PDF per note",
-      value: "separate",
-    });
-    modeSelect.createEl("option", { text: "Combined PDF", value: "combined" });
-    modeSelect.value = this.outputMode;
-    modeSelect.addEventListener("change", () => {
-      this.outputMode = modeSelect.value as OutputMode;
-      this.combinedRow?.classList.toggle(
+    // Output mode + combined options exist ONLY for a multi-note export — a
+    // single note has nothing to combine, so it always exports one PDF beside
+    // the note (outputMode stays "separate"). Showing the toggle for one note
+    // would be meaningless clutter.
+    if (this.files.length > 1) {
+      // Output mode — one PDF per note, or a single combined PDF.
+      const modeLabel = controls.createEl("label", { text: "Output" });
+      modeLabel.addClass("cornell-pdf-export-label");
+      const modeSelect = modeLabel.createEl("select");
+      modeSelect.createEl("option", {
+        text: "One PDF per note",
+        value: "separate",
+      });
+      modeSelect.createEl("option", { text: "Combined PDF", value: "combined" });
+      modeSelect.value = this.outputMode;
+      modeSelect.addEventListener("change", () => {
+        this.outputMode = modeSelect.value as OutputMode;
+        this.combinedRow?.classList.toggle(
+          "cornell-pdf-hidden",
+          this.outputMode !== "combined"
+        );
+      });
+
+      // Combined-only inputs: file name + target folder (shown only in combined).
+      this.combinedRow = contentEl.createDiv({ cls: "cornell-pdf-combined-row" });
+      const nameLabel = this.combinedRow.createEl("label", { text: "File name" });
+      nameLabel.addClass("cornell-pdf-export-label");
+      const nameInput = nameLabel.createEl("input", { type: "text" });
+      nameInput.value = this.combinedName;
+      nameInput.addEventListener("input", () => {
+        this.combinedName = nameInput.value;
+      });
+      const folderLabel = this.combinedRow.createEl("label", { text: "Folder" });
+      folderLabel.addClass("cornell-pdf-export-label");
+      const folderSelect = folderLabel.createEl("select");
+      this.folderOptions().forEach((opt) => {
+        folderSelect.createEl("option", { text: opt.label, value: opt.value });
+      });
+      folderSelect.value = this.combinedFolder;
+      folderSelect.addEventListener("change", () => {
+        this.combinedFolder = folderSelect.value;
+      });
+      this.combinedRow.classList.toggle(
         "cornell-pdf-hidden",
         this.outputMode !== "combined"
       );
-    });
-
-    // Combined-only inputs: file name + target folder (shown only in combined).
-    this.combinedRow = contentEl.createDiv({ cls: "cornell-pdf-combined-row" });
-    const nameLabel = this.combinedRow.createEl("label", { text: "File name" });
-    nameLabel.addClass("cornell-pdf-export-label");
-    const nameInput = nameLabel.createEl("input", { type: "text" });
-    nameInput.value = this.combinedName;
-    nameInput.addEventListener("input", () => {
-      this.combinedName = nameInput.value;
-    });
-    const folderLabel = this.combinedRow.createEl("label", { text: "Folder" });
-    folderLabel.addClass("cornell-pdf-export-label");
-    const folderSelect = folderLabel.createEl("select");
-    this.folderOptions().forEach((opt) => {
-      folderSelect.createEl("option", { text: opt.label, value: opt.value });
-    });
-    folderSelect.value = this.combinedFolder;
-    folderSelect.addEventListener("change", () => {
-      this.combinedFolder = folderSelect.value;
-    });
-    this.combinedRow.classList.toggle(
-      "cornell-pdf-hidden",
-      this.outputMode !== "combined"
-    );
+    }
 
     // Selection header with select-all / select-none.
     const selHeader = contentEl.createDiv({

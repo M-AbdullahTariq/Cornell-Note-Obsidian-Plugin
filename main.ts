@@ -304,7 +304,7 @@ export default class CornellNotesPlugin extends Plugin {
           if (!hasCornellCssClass(getFrontmatter(file))) return;
           menu.addItem((item) =>
             item
-              .setTitle("Export to PDF")
+              .setTitle("Export PDF")
               .setIcon("file-text")
               .onClick(() =>
                 new CornellPdfExportModal(this, [file]).open()
@@ -321,7 +321,10 @@ export default class CornellNotesPlugin extends Plugin {
           if (notes.length === 0) return;
           menu.addItem((item) =>
             item
-              .setTitle("Export cornell notes to PDF")
+              // "PDFs" (plural acronym) trips the sentence-case rule, which wants
+              // "pdfs"; the plural label is intentional here.
+              // eslint-disable-next-line obsidianmd/ui/sentence-case
+              .setTitle("Export to PDFs")
               .setIcon("file-text")
               .onClick(() => new CornellPdfExportModal(this, notes).open())
           );
