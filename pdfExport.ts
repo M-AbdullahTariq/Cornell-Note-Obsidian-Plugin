@@ -22,8 +22,9 @@ import {
   MarkdownRenderer,
   normalizePath,
   TFile,
+  TFolder,
 } from "obsidian";
-import { leadsWithTitle } from "./classifier";
+import { hasCornellCssClass } from "./classifier";
 
 const HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
 
@@ -114,32 +115,77 @@ function stripFrontmatter(source: string): string {
 }
 
 /** Pure: decide the markdown to render for the PDF. Frontmatter is stripped (the
- *  renderer ignores it anyway), and when the note does not lead with a
- *  `> [!title]` the file name is injected as the title callout — reproducing the
- *  Reading-view file-name fallback so every exported sheet has a heading. */
-export function buildPrintableMarkdown(
-  source: string,
-  frontmatter: unknown,
-  basename: string
-): string {
+ *  renderer ignores it anyway) and the file name is ALWAYS injected as a leading
+ *  `> [!title]` callout, so every exported sheet shows the file name as its title.
+ *  A note that already leads with its own `> [!title]` keeps it — that title
+ *  renders just below the file-name title. */
+export function buildPrintableMarkdown(source: string, basename: string): string {
   const body = stripFrontmatter(source);
-  if (leadsWithTitle(source, frontmatter)) return body;
   const safeTitle = basename.replace(/[\r\n]+/g, " ").trim();
   return `> [!title] ${safeTitle}\n\n${body}`;
 }
 
 const HOLDER_CLASS = "cornell-pdf-export-holder";
 
-/** Paper size offered for export. Electron's `printToPDF` accepts these names
- *  directly as its `pageSize` option. Persisted in settings as the last-used. */
-export type PageSize = "A4" | "Letter";
+/** The paper sizes offered for export — the full set from
+ *  l1xnan/obsidian-better-export-pdf. Order is the dropdown order. */
+export const PAGE_SIZES = [
+  "A0",
+  "A1",
+  "A2",
+  "A3",
+  "A4",
+  "A5",
+  "A6",
+  "Legal",
+  "Letter",
+  "Tabloid",
+  "Ledger",
+] as const;
 
-/** Pure: the Electron `printToPDF` options for a given page size. `printBackground`
- *  keeps the divider lines/colors without any user toggle. */
+/** A paper size for export. Persisted in settings as the last-used. */
+export type PageSize = (typeof PAGE_SIZES)[number];
+
+/** Page dimensions in millimetres `[width, height]`. Source: l1xnan/
+ *  obsidian-better-export-pdf `constant.ts`. Ledger is landscape (432×279). */
+const PAGE_SIZE_MM: Record<PageSize, [number, number]> = {
+  A0: [841, 1189],
+  A1: [594, 841],
+  A2: [420, 594],
+  A3: [297, 420],
+  A4: [210, 297],
+  A5: [148, 210],
+  A6: [105, 148],
+  Legal: [216, 356],
+  Letter: [216, 279],
+  Tabloid: [279, 432],
+  Ledger: [432, 279],
+};
+
+const MM_PER_INCH = 25.4;
+
+/** Coerce an arbitrary persisted value to a valid `PageSize`, falling back to A4.
+ *  Lets settings widen the union without a migration: an old or unknown saved
+ *  value (or a future size that was removed) resolves to the default. */
+export function normalizePageSize(value: unknown): PageSize {
+  return (PAGE_SIZES as readonly string[]).includes(value as string)
+    ? (value as PageSize)
+    : "A4";
+}
+
+/** Pure: the Electron `printToPDF` options for a page size. Dimensions are passed
+ *  explicitly in inches (mm ÷ 25.4) rather than by Electron's named sizes, so all
+ *  11 sizes — including ones Electron does not name reliably (Ledger, A0–A2, A6) —
+ *  render at the correct dimensions. `printBackground` keeps divider lines/colors
+ *  without any user toggle. */
 export function printOptionsForPageSize(
   pageSize: PageSize
 ): Record<string, unknown> {
-  return { printBackground: true, pageSize };
+  const [w, h] = PAGE_SIZE_MM[pageSize];
+  return {
+    printBackground: true,
+    pageSize: { width: w / MM_PER_INCH, height: h / MM_PER_INCH },
+  };
 }
 
 /** Pure: where the exported PDF is written — `<note>.pdf` in the note's own
@@ -148,6 +194,49 @@ export function printOptionsForPageSize(
 export function resolvePdfOutputPath(file: TFile): string {
   const dir = file.parent && !file.parent.isRoot() ? `${file.parent.path}/` : "";
   return normalizePath(`${dir}${file.basename}.pdf`);
+}
+
+/** Pure: destination for the combined PDF — `name` (with a `.pdf` extension
+ *  ensured, newlines stripped, blank → "Cornell Notes") inside `folderPath`
+ *  (vault root when empty or "/"). Mirrors the per-note resolver's location
+ *  handling for the single combined file. */
+export function resolveCombinedOutputPath(
+  folderPath: string,
+  name: string
+): string {
+  const base = name.replace(/[\r\n]+/g, " ").trim() || "Cornell Notes";
+  const fileName = base.toLowerCase().endsWith(".pdf") ? base : `${base}.pdf`;
+  const dir = folderPath && folderPath !== "/" ? `${folderPath}/` : "";
+  return normalizePath(`${dir}${fileName}`);
+}
+
+/** Recursively collect every markdown file under a folder, descendants included.
+ *  A plain walk over the vault's in-memory folder tree (no file reads); the
+ *  caller filters to Cornell notes with `collectCornellNotes`. */
+export function descendantMarkdownFiles(folder: TFolder): TFile[] {
+  const out: TFile[] = [];
+  const walk = (f: TFolder): void => {
+    for (const child of f.children) {
+      if (child instanceof TFolder) {
+        walk(child);
+      } else if (child instanceof TFile && child.extension === "md") {
+        out.push(child);
+      }
+    }
+  };
+  walk(folder);
+  return out;
+}
+
+/** Filter a list of markdown files to the Cornell notes among them, reusing the
+ *  cssclass check against each file's frontmatter. `getFrontmatter` decouples the
+ *  filter from the metadata cache so the Cornell-only rule has a single source of
+ *  truth, shared between the export scope and the context-menu visibility check. */
+export function collectCornellNotes(
+  files: TFile[],
+  getFrontmatter: (file: TFile) => unknown
+): TFile[] {
+  return files.filter((file) => hasCornellCssClass(getFrontmatter(file)));
 }
 
 /** Minimal shape of the Electron `<webview>` element we drive. The tag exposes
@@ -238,8 +327,7 @@ export async function renderCornellExportGrid(
   const win = activeWindow;
 
   const source = await app.vault.cachedRead(file);
-  const frontmatter = app.metadataCache.getFileCache(file)?.frontmatter;
-  const markdown = buildPrintableMarkdown(source, frontmatter, file.basename);
+  const markdown = buildPrintableMarkdown(source, file.basename);
 
   const renderHost = doc.body.createDiv({
     cls: `${HOLDER_CLASS} cornell-note`,

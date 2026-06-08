@@ -18,6 +18,7 @@
 import { ButtonComponent, Modal, Notice, TFile } from "obsidian";
 import type CornellNotesPlugin from "./main";
 import {
+  PAGE_SIZES,
   PageSize,
   PrintWebview,
   bodyClassForExport,
@@ -59,7 +60,7 @@ export class CornellPdfExportModal extends Modal {
     const sizeLabel = controls.createEl("label", { text: "Page size" });
     sizeLabel.addClass("cornell-pdf-export-label");
     const select = sizeLabel.createEl("select");
-    (["A4", "Letter"] as PageSize[]).forEach((size) => {
+    PAGE_SIZES.forEach((size) => {
       select.createEl("option", { text: size, value: size });
     });
     select.value = this.pageSize;
