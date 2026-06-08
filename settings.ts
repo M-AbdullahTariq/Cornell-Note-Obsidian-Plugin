@@ -22,8 +22,8 @@ export interface CornellSettings {
    *  colored box around it to signal it's clickable. Off by default — the
    *  pointer cursor is the only affordance unless the user opts in. */
   reviewHoverHighlight: boolean;
-  /** Last-used page size for "Export note to PDF". The export modal defaults to
-   *  this and writes it back on change, so the choice persists between exports. */
+  /** Last-used page size for PDF export. The export modal defaults to this and
+   *  writes it back on change, so the choice persists between exports. */
   pdfPageSize: PageSize;
 }
 
