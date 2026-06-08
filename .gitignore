@@ -11,3 +11,6 @@ PRD*.md
 PLAN*.md
 CLAUDE.md
 .claude/
+
+# Reference clone — never stage or push from this repo.
+Inspired Repo/
