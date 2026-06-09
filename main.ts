@@ -13,6 +13,8 @@ import {
   invalidTooltip,
   leadsWithTitle,
   reviewBlurInfo,
+  TITLE_OVER_LIMIT_TOOLTIP,
+  titleExceedsLimit,
 } from "./classifier";
 import {
   collectCornellNotes,
@@ -231,6 +233,10 @@ export default class CornellNotesPlugin extends Plugin {
         "data-cornell-in-region",
         !!slot.isHeading && slot.cueGroup != null
       );
+      // Page-break gap for the 2nd+ page title, by attribute on the title block
+      // itself so it survives Reading view re-rendering sections on scroll
+      // (a `~` sibling selector drops when the earlier title is unloaded).
+      wrapper.toggleAttribute("data-cornell-page-break", !!slot.pageBreak);
 
       // Review-mode markers (stamped unconditionally — the `cornell-review`
       // class on the sizer is what actually gates the blur, so toggling review
@@ -279,6 +285,25 @@ export default class CornellNotesPlugin extends Plugin {
           }
         }
       }
+
+      // Flag an over-limit page title (red text + tooltip) — the Reading-view
+      // half of the warn-in-both-views behaviour. Mirrors the cue flagging
+      // above; warn-and-keep, so the text is never blocked or trimmed and the
+      // class clears on re-render once the title is shortened to the limit.
+      if (slot.role === "title") {
+        const titleEl = el.querySelector<HTMLElement>(
+          '.callout[data-callout="title"]'
+        );
+        if (titleEl) {
+          const over = titleExceedsLimit(slot.content ?? "");
+          titleEl.classList.toggle("cornell-title-over-limit", over);
+          if (over) {
+            titleEl.setAttribute("title", TITLE_OVER_LIMIT_TOOLTIP);
+          } else {
+            titleEl.removeAttribute("title");
+          }
+        }
+      }
     });
 
     this.registerEvent(
@@ -296,6 +321,8 @@ export default class CornellNotesPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         if (Platform.isMobile) return;
+        // Opt-in feature: no menu items unless the user enabled PDF export.
+        if (!this.settings.pdfExportEnabled) return;
         const getFrontmatter = (f: TFile): unknown =>
           this.app.metadataCache.getFileCache(f)?.frontmatter;
 

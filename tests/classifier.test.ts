@@ -393,3 +393,47 @@ test("a list or table glued to a cue is not lazy-body (it breaks out of the call
     undefined
   );
 });
+
+test("blank lines after a title become a gap slot (collapsed in Live Preview)", () => {
+  const md = `> [!title] Page One
+
+
+> [!cue] A
+
+body
+`;
+  const slots = classifyBlocks(md, FM);
+  assert.equal(slots[0].role, "title");
+  // The two blank lines below the title collapse into one gap slot, so the
+  // editing view doesn't render them as a large raw gap under the title.
+  assert.equal(slots[1].role, "gap");
+  assert.equal(slots[1].lineRanges.length, 2);
+});
+
+test("blank lines before a title become a gap slot (collapsed in Live Preview)", () => {
+  const md = `> [!cue] A
+
+body
+
+
+> [!title] Page Two
+`;
+  const slots = classifyBlocks(md, FM);
+  // ...cue, gap, body, then the run of blanks before the title is its own gap.
+  const titleIdx = slots.findIndex((s) => s.role === "title");
+  assert.ok(titleIdx > 0, "title slot should exist");
+  const before = slots[titleIdx - 1];
+  assert.equal(before.role, "gap");
+  assert.equal(before.lineRanges.length, 2);
+});
+
+test("a title with no surrounding blanks emits no gap slot", () => {
+  const md = `> [!title] Page One
+> [!cue] A
+
+body
+`;
+  const slots = classifyBlocks(md, FM);
+  assert.equal(slots[0].role, "title");
+  assert.equal(slots[1].role, "cue");
+});

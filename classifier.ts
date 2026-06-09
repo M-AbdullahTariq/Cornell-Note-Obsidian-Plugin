@@ -53,6 +53,12 @@ export interface Slot {
    *  page). Renderers use it to scope a summary to its page and to separate
    *  consecutive pages. */
   page?: number;
+  /** `title` only: true for every page title EXCEPT the first in the document.
+   *  Reading view stamps it as `data-cornell-page-break` so the page-break gap
+   *  is applied by attribute on the title block itself — robust to Reading
+   *  view's scroll-driven section re-renders, which can drop the earlier title
+   *  a `~` sibling selector would depend on. */
+  pageBreak?: boolean;
   /** 0-based ordinal of the cue that "owns" this slot for review mode. Each cue
    *  gets an ordinal; every block in its notes region (until the next cue /
    *  title / summary, or end) inherits it, so review mode can reveal a cue's
@@ -179,7 +185,22 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
         lineRanges: lineRangesOf(i, m),
         content: extractContent(kinds, i, m),
       });
-      i = m;
+      // Blank lines immediately AFTER a title become a `gap` slot so Live
+      // Preview collapses them (like the post-cue gap). Without this the literal
+      // empty source lines below a `>[!title]` render full-height, so the editing
+      // view shows a large gap under the title that Reading view doesn't (it
+      // collapses blank markdown and uses --cornell-title-gap instead). The
+      // controlled gap is re-added in CSS as the title's own margin-bottom.
+      let g = m;
+      while (g < lns.length && kinds[g].kind === "blank") g++;
+      if (g > m) {
+        slots.push({
+          role: "gap",
+          sourceRange: blockRange(m, g),
+          lineRanges: lineRangesOf(m, g),
+        });
+      }
+      i = g;
       continue;
     }
 
@@ -244,8 +265,29 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
       continue;
     }
 
-    // --- Blank not following a cue → no slot -------------------------------
+    // --- Blank lines -------------------------------------------------------
     if (kind.kind === "blank") {
+      // A run of blanks directly BEFORE a page title collapses in Live Preview
+      // (like the post-cue / post-title gap), so the editing view doesn't stack
+      // empty source lines above the title. Page separation for the 2nd+ title
+      // is owned by the page-break margin, not by these blank lines, so dropping
+      // them is safe. Any other trailing/leading blank carries no slot.
+      let b = i;
+      while (b < lns.length && kinds[b].kind === "blank") b++;
+      const next = b < lns.length ? kinds[b] : null;
+      if (
+        next &&
+        next.kind === "callout-start" &&
+        next.calloutType === "title"
+      ) {
+        slots.push({
+          role: "gap",
+          sourceRange: blockRange(i, b),
+          lineRanges: lineRangesOf(i, b),
+        });
+        i = b;
+        continue;
+      }
       i++;
       continue;
     }
@@ -269,8 +311,15 @@ export function classifyBlocks(markdown: string, frontmatter: unknown): Slot[] {
   // first title is page 0 (the file-name page); each title increments the
   // counter so its block and the content beneath it share a page number.
   let page = 0;
+  let titleSeen = false;
   for (const slot of slots) {
-    if (slot.role === "title") page++;
+    if (slot.role === "title") {
+      page++;
+      // First title stays flush with the top; every later title carries the
+      // page-break flag so the gap is applied per-block (see Slot.pageBreak).
+      slot.pageBreak = titleSeen;
+      titleSeen = true;
+    }
     slot.page = page;
   }
 
@@ -357,6 +406,28 @@ export function reviewBlurInfo(
     return { blur: true, group: `cue:${slot.cueGroup}` };
   }
   return { blur: false, group: null };
+}
+
+/** Maximum length, in characters, of a `>[!title]` page title's text. A page
+ *  title must fit on a single line; over the cap, both renderers flag the title
+ *  (red text + the tooltip below) and clamp it to one line. A fixed character
+ *  count — predictable and independent of theme, font, or window width. */
+export const TITLE_MAX_LENGTH = 60;
+
+/** Tooltip shown on an over-limit page title, in both Reading view and Live
+ *  Preview. Centralised so the two renderers show the identical message — the
+ *  same arrangement as `invalidTooltip` for cues. */
+export const TITLE_OVER_LIMIT_TOOLTIP = "Max title limit hit";
+
+/** Pure: true when a page title's text is longer than `limit` characters. The
+ *  single source of truth for "is this title too long," consumed by both
+ *  renderers. Measures the title text only (the text after the `>[!title]`
+ *  marker, as the classifier records it in `Slot.content`). */
+export function titleExceedsLimit(
+  text: string,
+  limit: number = TITLE_MAX_LENGTH
+): boolean {
+  return text.length > limit;
 }
 
 /** True when the document's first content block (after any YAML frontmatter)

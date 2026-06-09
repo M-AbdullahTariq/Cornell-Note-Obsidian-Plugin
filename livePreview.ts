@@ -11,6 +11,8 @@ import {
   classifyBlocks,
   hasCornellCssClass,
   invalidTooltip,
+  TITLE_OVER_LIMIT_TOOLTIP,
+  titleExceedsLimit,
   type Slot,
 } from "./classifier";
 
@@ -22,6 +24,7 @@ const BODY_LINE_CLASS = "cornell-body-line";
 const HEADING_LINE_CLASS = "cornell-heading-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
+const TITLE_OVER_LIMIT_CLASS = "cornell-title-over-limit";
 
 export const cornellRefreshEffect = StateEffect.define<void>();
 
@@ -100,12 +103,18 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
             slot.role === "summary" ||
             slot.role === "title"
           ) {
-            const cls =
+            let cls =
               slot.role === "cue"
                 ? CUE_LINE_CLASS
                 : slot.role === "summary"
                 ? SUMMARY_LINE_CLASS
                 : TITLE_LINE_CLASS;
+            // An over-limit title's raw source line turns red too, so the error
+            // shows while the cursor is inside the title (editing). The rendered
+            // title callout is flagged separately on the next frame.
+            if (slot.role === "title" && titleExceedsLimit(slot.content ?? "")) {
+              cls += ` ${TITLE_OVER_LIMIT_CLASS}`;
+            }
             const startLineNum = view.state.doc.lineAt(slot.sourceRange.from).number;
             const endLineNum = view.state.doc.lineAt(
               Math.max(slot.sourceRange.from, slot.sourceRange.to - 1)
@@ -170,8 +179,12 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         const invalidReasons = slots
           .filter((s) => s.role === "cue")
           .map((s) => s.invalid ?? null);
+        const titleOverFlags = slots
+          .filter((s) => s.role === "title")
+          .map((s) => titleExceedsLimit(s.content ?? ""));
         window.requestAnimationFrame(() => {
           markInvalidCueCallouts(view, invalidReasons);
+          markOverLimitTitles(view, titleOverFlags);
         });
 
         return Decoration.set(ranges, true);
@@ -275,6 +288,27 @@ function markInvalidCueCallouts(
     el.classList.toggle(INVALID_CALLOUT_CLASS, reason !== null);
     if (reason) {
       el.setAttribute("title", invalidTooltip(reason));
+    } else {
+      el.removeAttribute("title");
+    }
+  });
+}
+
+/** Apply the over-limit warning (red text + tooltip) to the rendered title
+ *  callouts whose slot is flagged — the Live Preview half of the
+ *  warn-in-both-views behaviour. Title callouts are matched to the title slots
+ *  by document order, the same approach `markInvalidCueCallouts` uses for cues.
+ *  Run on an animation frame because the callout DOM is populated asynchronously
+ *  by Obsidian's renderer. */
+function markOverLimitTitles(view: EditorView, overFlags: boolean[]): void {
+  const titleEls = view.dom.querySelectorAll<HTMLElement>(
+    '.callout[data-callout="title"]'
+  );
+  titleEls.forEach((el, idx) => {
+    const over = overFlags[idx] ?? false;
+    el.classList.toggle(TITLE_OVER_LIMIT_CLASS, over);
+    if (over) {
+      el.setAttribute("title", TITLE_OVER_LIMIT_TOOLTIP);
     } else {
       el.removeAttribute("title");
     }

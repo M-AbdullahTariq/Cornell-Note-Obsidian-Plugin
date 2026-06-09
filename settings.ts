@@ -21,6 +21,11 @@ export interface CornellSettings {
    *  colored box around it to signal it's clickable. Off by default — the
    *  pointer cursor is the only affordance unless the user opts in. */
   reviewHoverHighlight: boolean;
+  /** When true, the right-click "Export PDF" / "Export to PDFs" menu items are
+   *  shown on Cornell notes and folders. Off by default — the feature is opt-in,
+   *  so the context menu stays uncluttered until the user enables it. Disabling
+   *  hides the menu items entirely (the export modal is never reachable). */
+  pdfExportEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: CornellSettings = {
@@ -31,6 +36,7 @@ export const DEFAULT_SETTINGS: CornellSettings = {
   summaryShortcut: "",
   titleShortcut: "",
   reviewHoverHighlight: false,
+  pdfExportEnabled: false,
 };
 
 /** The three shortcut trigger words, keyed by callout kind. */
@@ -55,8 +61,13 @@ export function findDuplicateTrigger(triggers: ShortcutTriggers): string | null 
   return null;
 }
 
+type SettingsTab = "layout" | "optional";
+
 export class CornellSettingsTab extends PluginSettingTab {
   private plugin: CornellNotesPlugin;
+  /** Which sub-tab is showing. Persisted only for the lifetime of the open
+   *  settings pane — it resets to "layout" each time the pane is reopened. */
+  private activeTab: SettingsTab = "layout";
 
   constructor(app: App, plugin: CornellNotesPlugin) {
     super(app, plugin);
@@ -67,6 +78,42 @@ export class CornellSettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // Sub-tab nav: keeps the pane from overwhelming the user by splitting the
+    // core layout knobs from the opt-in extras. Obsidian has no native settings
+    // sub-tabs, so this is a small button row that swaps the rendered body.
+    const nav = containerEl.createDiv({ cls: "cornell-settings-nav" });
+    const body = containerEl.createDiv({ cls: "cornell-settings-body" });
+
+    const tabs: { id: SettingsTab; label: string }[] = [
+      { id: "layout", label: "Layout" },
+      { id: "optional", label: "Optional" },
+    ];
+    const renderBody = () => {
+      body.empty();
+      if (this.activeTab === "layout") this.renderLayoutTab(body);
+      else this.renderOptionalTab(body);
+    };
+    tabs.forEach(({ id, label }) => {
+      const btn = nav.createEl("button", {
+        text: label,
+        cls: "cornell-settings-tab",
+      });
+      btn.toggleClass("is-active", this.activeTab === id);
+      btn.addEventListener("click", () => {
+        this.activeTab = id;
+        nav
+          .querySelectorAll(".cornell-settings-tab")
+          .forEach((el) => el.removeClass("is-active"));
+        btn.addClass("is-active");
+        renderBody();
+      });
+    });
+
+    renderBody();
+  }
+
+  /** Core layout knobs — the everyday Cornell-sheet geometry. */
+  private renderLayoutTab(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName("Cue column width")
       .setDesc("Width of the left margin column for cues, in pixels.")
@@ -112,6 +159,26 @@ export class CornellSettingsTab extends PluginSettingTab {
               this.plugin.settings.dividerThickness = n;
               await this.plugin.saveSettings();
             }
+          })
+      );
+  }
+
+  /** Opt-in extras — features that not every user needs, kept out of the way so
+   *  the main pane stays uncluttered. */
+  private renderOptionalTab(containerEl: HTMLElement): void {
+    new Setting(containerEl)
+      .setName("Enable PDF export")
+      .setDesc(
+        // "Cornell" is a proper noun, legitimately capitalized mid-sentence.
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        "Show a PDF export option when you right-click a Cornell note or a folder of Cornell notes. Off by default; turn it on to export study sheets to PDF."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.pdfExportEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.pdfExportEnabled = value;
+            await this.plugin.saveSettings();
           })
       );
 
