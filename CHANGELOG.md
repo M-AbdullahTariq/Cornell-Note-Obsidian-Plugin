@@ -5,6 +5,18 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1]
+
+### Changed
+
+- Maintenance release for the Obsidian community review: passes the
+  `eslint-plugin-obsidianmd` guideline checks across every source file. Two UI
+  strings were reworded to sentence case (no rule-disable comments), the PDF
+  export sets element sizing through `setCssStyles` instead of inline `style`
+  attributes, uses the cross-window-safe `instanceOf` check, no longer returns a
+  floating promise from the webview-setup listener, and drops an unnecessary
+  type assertion. The lint script now covers the PDF-export modules too.
+
 ## [1.2.0]
 
 ### Added

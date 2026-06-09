@@ -1,12 +1,12 @@
 {
   "name": "obsidian-cornell-notes",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Cornell-style note layout for Obsidian using native callouts.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "lint": "eslint main.ts classifier.ts livePreview.ts reviewMode.ts settings.ts",
+    "lint": "eslint main.ts classifier.ts livePreview.ts reviewMode.ts settings.ts pdfExport.ts pdfExportModal.ts",
     "test": "node tests/build.mjs && node --test \"tests/dist/*.test.cjs\""
   },
   "keywords": [

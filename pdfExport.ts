@@ -64,7 +64,7 @@ function exportRole(
  *  the result is always fully revealed. */
 export function stampExportHost(host: HTMLElement): void {
   const kids = Array.from(host.children).filter(
-    (c): c is HTMLElement => c instanceof HTMLElement
+    (c): c is HTMLElement => c.instanceOf(HTMLElement)
   );
   const roles = kids.map(exportRole);
 
@@ -338,7 +338,10 @@ export async function prepareExportWebview(
   const webview = doc.createElement("webview") as PrintWebview;
   webview.setAttribute("src", "app://obsidian.md/help.html");
   webview.setAttribute("nodeintegration", "true");
-  webview.setAttribute("style", "width:100%;height:100%;border:0;");
+  // Electron throttles a zero-size webview (it then prints blank), so it must
+  // fill its host. Set via setCssStyles rather than a static inline `style`
+  // attribute, per the Obsidian guidelines.
+  webview.setCssStyles({ width: "100%", height: "100%", border: "0" });
   host.appendChild(webview);
 
   // `dom-ready` fires once the webview's document is ready to script against.
@@ -349,19 +352,23 @@ export async function prepareExportWebview(
     );
     webview.addEventListener(
       "dom-ready",
-      async () => {
-        try {
-          win.clearTimeout(timer);
-          await webview.insertCSS(collectAppStyles(doc));
-          await webview.executeJavaScript(
-            buildSetupScript(options.bodyHtml, options.bodyClass)
-          );
-          // Patch print media LAST so it wins over app print rules.
-          await webview.insertCSS(PRINT_PATCH);
-          resolve();
-        } catch (e) {
-          reject(e instanceof Error ? e : new Error(String(e)));
-        }
+      () => {
+        // Wrapped in a void IIFE so the listener itself returns void (not a
+        // floating Promise) while the async setup still runs to resolve/reject.
+        void (async () => {
+          try {
+            win.clearTimeout(timer);
+            await webview.insertCSS(collectAppStyles(doc));
+            await webview.executeJavaScript(
+              buildSetupScript(options.bodyHtml, options.bodyClass)
+            );
+            // Patch print media LAST so it wins over app print rules.
+            await webview.insertCSS(PRINT_PATCH);
+            resolve();
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error(String(e)));
+          }
+        })();
       },
       { once: true }
     );
@@ -376,9 +383,9 @@ export async function prepareExportWebview(
   // the content already painted; required inside an animated container (the
   // preview modal), where the post-load paint is otherwise dropped.
   const baseWidth = webview.style.width || "100%";
-  webview.style.width = "99%";
+  webview.setCssStyles({ width: "99%" });
   await new Promise<void>((resolve) => win.setTimeout(resolve, 30));
-  webview.style.width = baseWidth;
+  webview.setCssStyles({ width: baseWidth });
   await new Promise<void>((resolve) => win.setTimeout(resolve, 30));
   return webview;
 }
@@ -404,10 +411,11 @@ export async function printPreparedWebview(
   await new Promise<void>((resolve) => win.setTimeout(resolve, 50));
   try {
     const data = await webview.printToPDF(A4_PRINT_OPTIONS);
-    return data.buffer.slice(
-      data.byteOffset,
-      data.byteOffset + data.byteLength
-    ) as ArrayBuffer;
+    // Copy into a fresh ArrayBuffer (not data.buffer.slice, whose type varies
+    // by lib version) so the return is a plain ArrayBuffer with no assertion.
+    const out = new ArrayBuffer(data.byteLength);
+    new Uint8Array(out).set(data);
+    return out;
   } finally {
     await toggle(false);
   }

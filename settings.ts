@@ -169,9 +169,7 @@ export class CornellSettingsTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Enable PDF export")
       .setDesc(
-        // "Cornell" is a proper noun, legitimately capitalized mid-sentence.
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
-        "Show a PDF export option when you right-click a Cornell note or a folder of Cornell notes. Off by default; turn it on to export study sheets to PDF."
+        "Show a PDF export option in the right-click menu, off by default. Cornell notes and folders of them can then be exported as study sheets."
       )
       .addToggle((toggle) =>
         toggle
