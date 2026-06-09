@@ -1,6 +1,6 @@
 {
   "name": "obsidian-cornell-notes",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "description": "Cornell-style note layout for Obsidian using native callouts.",
   "main": "main.js",
   "scripts": {

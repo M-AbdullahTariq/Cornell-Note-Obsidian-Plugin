@@ -5,6 +5,35 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0]
+
+### Added
+
+- **Settings tabs.** The settings pane is split into a **Layout** tab (cue
+  column width, divider color and thickness) and an **Optional** tab (PDF
+  export, the review-mode hover highlight, and the cue/summary/title
+  shortcuts), so the everyday layout knobs aren't crowded by the extras.
+- **PDF export is now opt-in.** A new "Enable PDF export" toggle on the
+  Optional tab controls whether the right-click "Export PDF" option appears.
+  Off by default; turn it on to export.
+
+### Fixed
+
+- **Cue/notes alignment in editing view.** Cues now sit on the same row as the
+  first line of their notes. The rendered cue widget had kept an explicit
+  height that left empty space below the floating cue and pushed the notes down
+  a full block.
+- **Title spacing in editing view.** A page title now sits a controlled gap
+  above the first cue — matching Reading view — instead of the large gap left
+  by blank source lines and the title widget's reserved padding. Blank lines
+  around a title now collapse in Live Preview the way the post-cue gap already
+  did.
+- **Doubled notes/summary separator in editing view.** The rule above the
+  summary drew twice when the callout widget was wrapped in nested blocks; it
+  now draws exactly once, on the summary callout itself.
+- Over-limit page titles are flagged in editing view too (red text + tooltip),
+  matching Reading view.
+
 ## [1.1.0]
 
 ### Added
