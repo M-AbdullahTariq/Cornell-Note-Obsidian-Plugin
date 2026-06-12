@@ -11,10 +11,12 @@
 // l1xnan/obsidian-better-export-pdf.
 //
 // Flow: read source → build printable markdown (strip frontmatter, inject the
-// file-name fallback title when absent) → render into an off-screen container →
-// stamp slot roles structurally → serialize → load into an off-screen <webview>
-// with all styles + the `cornell-printing` light/paged palette → `printToPDF` →
-// write `<note>.pdf` next to the note. Desktop only; the caller guards mobile.
+// file-name title) → render into an off-screen container → classify the
+// printable source and stamp slot roles from the classifier's slots (the same
+// authority both live views use; see exportMap.ts) → serialize → load into an
+// off-screen <webview> with all styles + the `cornell-printing` light/paged
+// palette → `printToPDF` → write `<note>.pdf` next to the note. Desktop only;
+// the caller guards mobile.
 
 import {
   App,
@@ -30,99 +32,92 @@ import {
   ATTR_REVIEW_BLUR,
   ATTR_SLOT,
   hasCornellCssClass,
+  type Slot,
 } from "./classifier";
+import {
+  type BlockAssignment,
+  type BlockShape,
+  buildPrintableMarkdown,
+  classifyPrintable,
+  mapSlotsToBlocks,
+} from "./exportMap";
+
+export { buildPrintableMarkdown } from "./exportMap";
 
 const HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
 
-/** Classify one top-level block wrapper in a rendered (non-source-mapped) DOM by
- *  its content. Mirrors the classifier's roles structurally: cue/summary/title
- *  from the callout type, any other callout is body, a heading-only block is a
- *  heading, and a horizontal rule or Obsidian chrome (frontmatter / properties /
- *  inline title) stays full-width (null → no attribute → default rule). Shared
- *  by the export command and the Reading-view post-processor's export fallback. */
-function exportRole(
-  child: HTMLElement
-): "cue" | "summary" | "title" | "heading" | "body" | null {
+/** Read one rendered top-level block's structural signature, for aligning the
+ *  classifier's slots with the export DOM (see exportMap.ts). Match priority
+ *  mirrors the old DOM-only role reader: callouts first (nested matches
+ *  count), then Obsidian chrome, then headings and rules. */
+function blockShape(child: HTMLElement): BlockShape {
   const hasCallout = (type: string): boolean =>
     child.matches(`.callout[data-callout="${type}"]`) ||
     !!child.querySelector(`.callout[data-callout="${type}"]`);
-  if (hasCallout("cue")) return "cue";
-  if (hasCallout("summary")) return "summary";
-  if (hasCallout("title")) return "title";
-  if (child.matches(".callout") || child.querySelector(".callout")) return "body";
+  // Cue > summary > title, ANY descendant counts — identical to the old
+  // role reader, so the fallback path's edge cases don't shift.
+  for (const type of ["cue", "summary", "title"]) {
+    if (hasCallout(type)) return { kind: "callout", calloutType: type };
+  }
+  if (child.matches(".callout") || child.querySelector(".callout")) {
+    return { kind: "callout" };
+  }
   if (
     child.matches(".mod-header, .metadata-container, .frontmatter") ||
     child.querySelector(".metadata-container, .frontmatter, .inline-title")
   ) {
-    return null;
+    return { kind: "chrome" };
   }
   if (child.matches(HEADING_SELECTOR) || child.querySelector(HEADING_SELECTOR)) {
-    return "heading";
+    return { kind: "heading" };
   }
-  if (child.matches("hr") || child.querySelector(":scope > hr")) return null;
-  return "body";
+  if (child.matches("hr") || child.querySelector(":scope > hr")) {
+    return { kind: "hr" };
+  }
+  return { kind: "other" };
 }
 
-/** Stamp `data-cornell-slot` (+ in-region / notes-end markers) on every top-level
- *  child of a grid host by walking the DOM. Used where source line info is not
- *  available (the export command's own render, and the post-processor's
- *  export-to-PDF fallback). Idempotent. Review-mode blur markers are stripped so
- *  the result is always fully revealed. */
+/** Apply one mapped assignment to a rendered block. Review-mode blur markers
+ *  are stripped so an export is always fully revealed. */
+function applyAssignment(child: HTMLElement, a: BlockAssignment): void {
+  child.removeAttribute(ATTR_REVIEW_BLUR);
+  if (a.role === null) {
+    child.removeAttribute(ATTR_SLOT);
+    child.removeAttribute(ATTR_IN_REGION);
+    child.removeAttribute(ATTR_NOTES_END);
+    return;
+  }
+  child.setAttribute(ATTR_SLOT, a.role);
+  child.toggleAttribute(ATTR_IN_REGION, a.role === "heading" && a.inRegion);
+  child.toggleAttribute(ATTR_NOTES_END, a.notesEnd);
+}
+
+/** Stamp a freshly rendered export grid from the classifier's slot list — the
+ *  same placement authority both live views use. The DOM contributes only each
+ *  block's structural shape, for alignment; the decisions ride in the slots. */
+export function stampGridFromSlots(host: HTMLElement, slots: Slot[]): void {
+  const kids = Array.from(host.children).filter(
+    (c): c is HTMLElement => c.instanceOf(HTMLElement)
+  );
+  const assignments = mapSlotsToBlocks(slots, kids.map(blockShape));
+  kids.forEach((child, i) => applyAssignment(child, assignments[i]));
+}
+
+/** FALLBACK ONLY — structural stamping with no source available. The one
+ *  caller is the Reading-view post-processor's built-in "Export to PDF" path,
+ *  where `getSectionInfo` returns null and the rendered DOM is all there is.
+ *  The plugin's own export goes through `stampGridFromSlots` (classifier-
+ *  driven); keep this walker byte-compatible with it, not the other way
+ *  around. Idempotent. Review-mode blur markers are stripped so the result is
+ *  always fully revealed. */
 export function stampExportHost(host: HTMLElement): void {
   const kids = Array.from(host.children).filter(
     (c): c is HTMLElement => c.instanceOf(HTMLElement)
   );
-  const roles = kids.map(exportRole);
-
-  // In-region tracking mirrors the classifier's cueGroup: a cue opens a region;
-  // a title or summary closes it. Headings inside an open region draw the
-  // cue|notes divider; orphan headings (before any cue) do not.
-  let active = false;
-  const inRegion = roles.map((role) => {
-    if (role === "cue") {
-      active = true;
-      return false;
-    }
-    if (role === "title" || role === "summary") {
-      active = false;
-      return false;
-    }
-    return active;
-  });
-
-  const dividing = (i: number): boolean =>
-    roles[i] === "body" || (roles[i] === "heading" && inRegion[i]);
-
-  kids.forEach((child, i) => {
-    const role = roles[i];
-    child.removeAttribute(ATTR_REVIEW_BLUR);
-    if (role === null) {
-      child.removeAttribute(ATTR_SLOT);
-      child.removeAttribute(ATTR_IN_REGION);
-      child.removeAttribute(ATTR_NOTES_END);
-      return;
-    }
-    child.setAttribute(ATTR_SLOT, role);
-    child.toggleAttribute(ATTR_IN_REGION, role === "heading" && inRegion[i]);
-    child.toggleAttribute(ATTR_NOTES_END, dividing(i) && !dividing(i + 1));
-  });
-}
-
-/** Strip a single leading YAML frontmatter block (`---` … `---`) from source. */
-function stripFrontmatter(source: string): string {
-  const m = source.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
-  return m ? source.slice(m[0].length) : source;
-}
-
-/** Pure: decide the markdown to render for the PDF. Frontmatter is stripped (the
- *  renderer ignores it anyway) and the file name is ALWAYS injected as a leading
- *  `> [!title]` callout, so every exported sheet shows the file name as its title.
- *  A note that already leads with its own `> [!title]` keeps it — that title
- *  renders just below the file-name title. */
-export function buildPrintableMarkdown(source: string, basename: string): string {
-  const body = stripFrontmatter(source);
-  const safeTitle = basename.replace(/[\r\n]+/g, " ").trim();
-  return `> [!title] ${safeTitle}\n\n${body}`;
+  // With no slots to consume, every shape takes the mapper's structural
+  // fallback branch — the old DOM-only behaviour, through the same code path.
+  const assignments = mapSlotsToBlocks([], kids.map(blockShape));
+  kids.forEach((child, i) => applyAssignment(child, assignments[i]));
 }
 
 const HOLDER_CLASS = "cornell-pdf-export-holder";
@@ -301,7 +296,9 @@ export async function renderCornellExportGrid(
 
   try {
     await MarkdownRenderer.render(app, markdown, grid, file.path, component);
-    stampExportHost(grid);
+    // Placement comes from the classifier — the authority both live views use —
+    // with the rendered blocks contributing only their shapes for alignment.
+    stampGridFromSlots(grid, classifyPrintable(markdown));
     // Let any async sub-renders (callouts, math, embeds) settle.
     await new Promise<void>((resolve) => win.setTimeout(resolve, 150));
     return { grid, dispose };

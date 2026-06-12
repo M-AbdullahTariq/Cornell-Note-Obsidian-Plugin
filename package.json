@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "lint": "eslint main.ts classifier.ts livePreview.ts reviewMode.ts settings.ts pdfExport.ts pdfExportModal.ts",
+    "lint": "eslint main.ts classifier.ts livePreview.ts reviewMode.ts settings.ts exportMap.ts pdfExport.ts pdfExportModal.ts",
     "test": "node tests/build.mjs && node --test \"tests/dist/*.test.cjs\""
   },
   "keywords": [
