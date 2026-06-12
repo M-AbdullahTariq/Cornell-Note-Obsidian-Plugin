@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>lpclick harness</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  /* Minimal stand-ins for Obsidian theme vars the plugin CSS consumes. */
+  :root {
+    --line-height: 1.5;
+    --font-text: sans-serif;
+    --font-adaptive-normal: 16px;
+    --text-normal: #ddd;
+    --background-primary: #1e1e1e;
+    --h1-size: 1.8em;
+  }
+  body { margin: 0; background: #1e1e1e; color: #ddd; font-family: sans-serif; }
+  #host { width: 760px; margin: 20px auto; }
+  .cm-editor { font-size: 16px; line-height: 1.5; }
+  #out { white-space: pre; font-family: monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="cornell-note">
+  <div id="host"></div>
+</div>
+<pre id="out">RUNNING</pre>
+<script src="bundle.js"></script>
+</body>
+</html>

@@ -770,10 +770,17 @@
  * reported "summary has 2 lines" bug. The border instead lives on the inner
  * `.callout[data-callout="summary"]` (rule below), which is unique per summary,
  * so the separator draws exactly once regardless of wrapper nesting. The top
- * margin (`--cue-gap`) here gives the band breathing room above the rule. */
+ * padding (`--cue-gap`) here gives the band breathing room above the rule.
+ *
+ * PADDING, not margin: CodeMirror 6 does not support vertical margins on
+ * lines or block widgets — its height map measures border-box heights only,
+ * so a vertical margin shifts everything below it relative to CM's internal
+ * geometry and clicks resolve to the wrong line (the reported "click the last
+ * line before the summary lands elsewhere" bug). The same rule applies to
+ * every `.cm-line` / `.cm-embed-block` rule in this section. */
 .cornell-note .cm-embed-block.cm-callout[data-cornell-slot="summary"] {
-  padding: 0 !important;
-  margin: var(--cue-gap) 0 0 0 !important;
+  padding: var(--cue-gap) 0 0 0 !important;
+  margin: 0 !important;
   contain: none !important;
   background: transparent !important;
   border: none !important;
@@ -799,12 +806,15 @@
  * rule's more specific `margin-left: 0 !important` until that rule started
  * excluding title embeds; it is live — and intended — now.) */
 .cornell-note .cm-embed-block.cm-callout[data-cornell-slot="title"] {
-  padding: 0 !important;
   /* `--cornell-title-gap` below the title is the controlled breathing room that
    * replaces the literal blank source lines (now collapsed by the classifier's
    * title gap slots), so the editing view matches Reading view instead of
-   * showing the large raw-blank-line gap. */
-  margin: 0 0 var(--cornell-title-gap) calc(0px - var(--cue-column-offset)) !important;
+   * showing the large raw-blank-line gap. It is PADDING, not margin — CM6's
+   * height map ignores vertical margins, which broke click→line mapping (see
+   * the summary embed-block rule above). The horizontal pull stays a margin
+   * (horizontal margins don't affect CM's vertical geometry). */
+  padding: 0 0 var(--cornell-title-gap) 0 !important;
+  margin: 0 0 0 calc(0px - var(--cue-column-offset)) !important;
   /* Like the cue widget, CodeMirror gives this callout widget an explicit
    * measured height that's taller than the one-line title, leaving dead space
    * below the title that pushed the first cue far down. `height: auto` shrinks
@@ -861,10 +871,13 @@
  * the render state where Obsidian shows this source line AND the rendered widget
  * at once, both border-tops painted. A single owner guarantees the rule draws
  * exactly once. livePreview.ts still tags only the first line with this marker
- * (every summary line carries `data-cornell-line="summary"`). */
+ * (every summary line carries `data-cornell-line="summary"`).
+ *
+ * All `2 * --cue-gap` of spacing is padding (matching the rendered state's
+ * wrapper-padding + callout-padding total): a margin here would desync CM6's
+ * height map from the visual layout and break click→line mapping. */
 .cornell-note .cm-line[data-cornell-summary-start] {
-  margin-top: var(--cue-gap);
-  padding-top: var(--cue-gap);
+  padding-top: calc(2 * var(--cue-gap));
 }
 
 /* Source-mode title line (raw `> [!title]` text visible). Pull it out of the
@@ -874,8 +887,9 @@
 .cornell-note .cm-line[data-cornell-line="title"] {
   margin-left: calc(0px - var(--cue-column-offset));
   /* Match the rendered title widget's gap below, so spacing doesn't jump when
-   * the cursor enters/leaves the title's source line. */
-  margin-bottom: var(--cornell-title-gap);
+   * the cursor enters/leaves the title's source line. Padding, not margin —
+   * vertical margins on `.cm-line` break CM6 click→line mapping. */
+  padding-bottom: var(--cornell-title-gap);
   text-align: center;
   font-size: var(--inline-title-size, var(--h1-size));
   font-weight: var(--inline-title-weight, var(--h1-weight, 700));
@@ -892,9 +906,10 @@
 /* Live Preview page-break gap. A title is either the source line (cursor
  * inside) or the rendered title embed-block (cursor outside), so a title can be
  * preceded by either form — all four combinations get the gap. `!important`
- * overrides the embed-block's `margin: 0 ... !important` chrome-strip above
+ * overrides the embed-block's `padding: ... !important` chrome-strip above
  * (only the top is raised; the negative left margin there is untouched). The
- * first title in the document has no preceding title and stays flush. */
+ * first title in the document has no preceding title and stays flush. Padding,
+ * not margin — vertical margins on CM6 lines/widgets break click→line mapping. */
 .cornell-note
   .cm-line[data-cornell-line="title"]
   ~ .cm-line[data-cornell-line="title"],
@@ -907,7 +922,7 @@
 .cornell-note
   .cm-embed-block[data-cornell-slot="title"]
   ~ .cm-embed-block[data-cornell-slot="title"] {
-  margin-top: var(--cornell-page-gap) !important;
+  padding-top: var(--cornell-page-gap) !important;
 }
 
 /* =====================================================================
