@@ -128,6 +128,29 @@ Changes apply instantly — no reload needed.
 | Toggle review mode | Turns active-recall study mode on/off (Reading view). |
 | Reset review reveals (re-blur all) | Re-hides every revealed region. |
 
+## Theming (CSS snippets)
+
+The plugin marks every Cornell block with stable `data-` attributes, so themes
+and CSS snippets can target them without depending on the plugin's internals.
+The same vocabulary is used in Reading view, Live Preview, and the PDF export:
+
+| Attribute | Where | Meaning |
+|---|---|---|
+| `data-cornell-slot` | block wrappers (all views) | The block's role: `cue`, `body`, `summary`, `title`, `heading`, or `full`. |
+| `data-cornell-in-region` | heading wrappers | The heading sits inside a cue's notes region (carries the divider). |
+| `data-cornell-notes-end` | body/heading wrappers | Last divider-carrying block of its region. |
+| `data-cornell-page-break` | title wrappers | Every page title except the document's first. |
+| `data-cornell-cue-group` | block wrappers (Reading view) | Review-mode reveal key shared by a cue and its region. |
+| `data-cornell-review-blur` | block wrappers (Reading view) | Blurs in review mode until revealed. |
+| `data-cornell-revealed` | block wrappers (Reading view) | Currently revealed in review mode. |
+| `data-cornell-line` | editor lines (Live Preview) | The line's role: `cue`, `body`, `summary`, `title`, `heading`, or `gap`. |
+| `data-cornell-summary-start` | editor lines (Live Preview) | A summary's first source line. |
+| `data-cornell-over-limit` | editor lines (Live Preview) | An over-length title line. |
+| `data-cornell-invalid` | embed blocks (Live Preview) | The widget contains an invalid cue. |
+
+These names are a public surface — they won't change without a major version
+bump.
+
 ## Building from source
 
 ```

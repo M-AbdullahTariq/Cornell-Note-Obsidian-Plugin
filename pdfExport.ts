@@ -24,7 +24,13 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
-import { hasCornellCssClass } from "./classifier";
+import {
+  ATTR_IN_REGION,
+  ATTR_NOTES_END,
+  ATTR_REVIEW_BLUR,
+  ATTR_SLOT,
+  hasCornellCssClass,
+} from "./classifier";
 
 const HEADING_SELECTOR = "h1, h2, h3, h4, h5, h6";
 
@@ -89,22 +95,16 @@ export function stampExportHost(host: HTMLElement): void {
 
   kids.forEach((child, i) => {
     const role = roles[i];
-    child.removeAttribute("data-cornell-review-blur");
+    child.removeAttribute(ATTR_REVIEW_BLUR);
     if (role === null) {
-      child.removeAttribute("data-cornell-slot");
-      child.removeAttribute("data-cornell-in-region");
-      child.removeAttribute("data-cornell-notes-end");
+      child.removeAttribute(ATTR_SLOT);
+      child.removeAttribute(ATTR_IN_REGION);
+      child.removeAttribute(ATTR_NOTES_END);
       return;
     }
-    child.setAttribute("data-cornell-slot", role);
-    child.toggleAttribute(
-      "data-cornell-in-region",
-      role === "heading" && inRegion[i]
-    );
-    child.toggleAttribute(
-      "data-cornell-notes-end",
-      dividing(i) && !dividing(i + 1)
-    );
+    child.setAttribute(ATTR_SLOT, role);
+    child.toggleAttribute(ATTR_IN_REGION, role === "heading" && inRegion[i]);
+    child.toggleAttribute(ATTR_NOTES_END, dividing(i) && !dividing(i + 1));
   });
 }
 

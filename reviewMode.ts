@@ -1,4 +1,9 @@
 import { App, MarkdownView, Notice } from "obsidian";
+import {
+  ATTR_CUE_GROUP,
+  ATTR_REVEALED,
+  ATTR_SLOT,
+} from "./classifier";
 
 const REVIEW_CLASS = "cornell-review";
 
@@ -58,11 +63,11 @@ export class ReviewModeController {
    *  added when that group is currently revealed for the file, removed
    *  otherwise. A no-op for wrappers with no group key. */
   restoreWrapper(wrapper: HTMLElement, filePath: string): void {
-    const group = wrapper.getAttribute("data-cornell-cue-group");
+    const group = wrapper.getAttribute(ATTR_CUE_GROUP);
     if (!group) return;
     const revealed = this.revealed.get(filePath)?.has(group) ?? false;
-    if (revealed) wrapper.setAttribute("data-cornell-revealed", "");
-    else wrapper.removeAttribute("data-cornell-revealed");
+    if (revealed) wrapper.setAttribute(ATTR_REVEALED, "");
+    else wrapper.removeAttribute(ATTR_REVEALED);
   }
 
   /** Handle a click anywhere in the workspace. When review mode is active and
@@ -76,13 +81,13 @@ export class ReviewModeController {
     if (!target) return;
     const sizer = target.closest(".markdown-preview-sizer.cornell-review");
     if (!sizer) return;
-    const wrapper = target.closest<HTMLElement>("[data-cornell-cue-group]");
+    const wrapper = target.closest<HTMLElement>(`[${ATTR_CUE_GROUP}]`);
     if (!wrapper || !sizer.contains(wrapper)) return;
     // Only cues and summaries are reveal triggers — clicking inside already-
     // revealed body text (e.g. a link) must behave normally, not re-blur.
-    const role = wrapper.getAttribute("data-cornell-slot");
+    const role = wrapper.getAttribute(ATTR_SLOT);
     if (role !== "cue" && role !== "summary") return;
-    const group = wrapper.getAttribute("data-cornell-cue-group");
+    const group = wrapper.getAttribute(ATTR_CUE_GROUP);
     if (!group) return;
     this.toggleGroup(sizer, group);
   }
@@ -108,13 +113,11 @@ export class ReviewModeController {
    *  click flips the whole group together. The choice is mirrored into the
    *  per-file revealed set for later re-application. */
   private toggleGroup(sizer: Element, group: string): void {
-    const selector = `[data-cornell-cue-group="${group}"]`;
-    const willReveal = !sizer.querySelector(
-      `${selector}[data-cornell-revealed]`
-    );
+    const selector = `[${ATTR_CUE_GROUP}="${group}"]`;
+    const willReveal = !sizer.querySelector(`${selector}[${ATTR_REVEALED}]`);
     sizer.querySelectorAll<HTMLElement>(selector).forEach((w) => {
-      if (willReveal) w.setAttribute("data-cornell-revealed", "");
-      else w.removeAttribute("data-cornell-revealed");
+      if (willReveal) w.setAttribute(ATTR_REVEALED, "");
+      else w.removeAttribute(ATTR_REVEALED);
     });
 
     const filePath = this.filePathForSizer(sizer);
@@ -138,8 +141,8 @@ export class ReviewModeController {
     this.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
       const view = leaf.view as MarkdownView;
       view.containerEl
-        .querySelectorAll("[data-cornell-revealed]")
-        .forEach((el) => el.removeAttribute("data-cornell-revealed"));
+        .querySelectorAll(`[${ATTR_REVEALED}]`)
+        .forEach((el) => el.removeAttribute(ATTR_REVEALED));
     });
   }
 }

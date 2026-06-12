@@ -8,11 +8,12 @@ import {
 } from "obsidian";
 import { EditorView } from "@codemirror/view";
 import {
+  type AttributeMap,
   classifySection,
   hasCornellCssClass,
   invalidTooltip,
   leadsWithTitle,
-  reviewBlurInfo,
+  slotAttributes,
   TITLE_OVER_LIMIT_TOOLTIP,
   titleExceedsLimit,
 } from "./classifier";
@@ -93,6 +94,19 @@ function cornellHost(el: HTMLElement): HTMLElement | null {
     block = block.parentElement;
   }
   return block.parentElement === scope ? scope : block.parentElement;
+}
+
+/** Apply an attribute map from the classifier's marking vocabulary: a string
+ *  value is set (empty string = boolean-style attribute), null removes — so
+ *  re-stamping a re-rendered block always clears stale markers. */
+function applyAttributes(el: HTMLElement, attrs: AttributeMap): void {
+  for (const [name, value] of Object.entries(attrs)) {
+    if (value === null) {
+      el.removeAttribute(name);
+    } else {
+      el.setAttribute(name, value);
+    }
+  }
 }
 
 /** Walk up from a rendered element to the host's direct child — the element
@@ -217,57 +231,18 @@ export default class CornellNotesPlugin extends Plugin {
       if (!resolved) return;
       const { slot, notesEnd } = resolved;
 
-      // Stamp the slot role on the grid-item wrapper (the preview-sizer's
-      // direct child) so the stylesheet can place it without `:has()` guesswork.
-      // Headings are a `full` slot, but get their own `heading` value so the
-      // stylesheet can place them in the notes column (col 3) instead of full
-      // width; in-region headings additionally carry `data-cornell-in-region`,
-      // which draws the cue|notes divider through them (orphan headings sit in
-      // the column but draw no divider segment).
+      // Stamp the marking vocabulary on the grid-item wrapper (the
+      // preview-sizer's direct child) so the stylesheet can place it without
+      // `:has()` guesswork. The full attribute set — slot role, in-region and
+      // page-break markers, review-mode reveal key and blur marker, and the
+      // per-section notes-end divider break — is decided by the classifier's
+      // `slotAttributes`, the single source of truth shared with the tests.
       const wrapper = (host ? hostChild(el, host) : null) ?? el;
-      wrapper.setAttribute(
-        "data-cornell-slot",
-        slot.isHeading ? "heading" : slot.role
-      );
-      wrapper.toggleAttribute(
-        "data-cornell-in-region",
-        !!slot.isHeading && slot.cueGroup != null
-      );
-      // Page-break gap for the 2nd+ page title, by attribute on the title block
-      // itself so it survives Reading view re-rendering sections on scroll
-      // (a `~` sibling selector drops when the earlier title is unloaded).
-      wrapper.toggleAttribute("data-cornell-page-break", !!slot.pageBreak);
-
-      // Review-mode markers (stamped unconditionally — the `cornell-review`
-      // class on the sizer is what actually gates the blur, so toggling review
-      // mode never needs a re-render). `data-cornell-cue-group` is the reveal
-      // key; `data-cornell-review-blur` marks blocks that blur until revealed.
-      const review = reviewBlurInfo(slot);
-      if (review.group) {
-        wrapper.setAttribute("data-cornell-cue-group", review.group);
-      } else {
-        wrapper.removeAttribute("data-cornell-cue-group");
-      }
-      if (review.blur) {
-        wrapper.setAttribute("data-cornell-review-blur", "");
-      } else {
-        wrapper.removeAttribute("data-cornell-review-blur");
-      }
+      applyAttributes(wrapper, slotAttributes(slot, notesEnd));
 
       // Re-apply any reveal the user already made for this group, so revealed
       // regions survive Reading-view re-renders rather than snapping re-blurred.
       this.reviewMode.restoreWrapper(wrapper, ctx.sourcePath);
-
-      // Break the divider line before the next cue, but only on the section
-      // that holds the region's last source line. A body slot can render as
-      // several sections (e.g. a table and the paragraph right below it); the
-      // interior ones must stay connected, so classifySection decides per
-      // section, not per slot. Toggle so re-renders don't leave a stale flag.
-      if (notesEnd) {
-        wrapper.setAttribute("data-cornell-notes-end", "");
-      } else {
-        wrapper.removeAttribute("data-cornell-notes-end");
-      }
 
       // Mark this section's cue invalid (adjacent-cue / lazy-body) directly —
       // no whole-preview index matching.

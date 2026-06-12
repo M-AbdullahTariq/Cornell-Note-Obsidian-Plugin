@@ -550,7 +550,7 @@
  *     embed-block (which collapses to 0 height) so the body source line
  *     visually sits on the same row.
  *   - Blank source lines between cue and body collapse via the
- *     `cornell-collapsed-gap` decoration.
+ *     `data-cornell-line="gap"` decoration.
  *
  * The cut-off bug is fixed entirely via the shared cue rules above
  * (no `overflow: hidden`, `overflow-wrap: anywhere`). Wrapping cues grow
@@ -572,7 +572,7 @@
 /* Per-line divider on body-content lines. Matches Reading view's
  * per-wrapper border-left. Stops at the first horizontal rule so the
  * summary region has no divider. */
-.cornell-note .cm-line.cornell-body-line {
+.cornell-note .cm-line[data-cornell-line="body"] {
   border-left: var(--cue-line);
   padding-left: 15px;
 }
@@ -580,9 +580,9 @@
 /* In-region heading line (Live Preview): same divider + indent as a body line,
  * so a `#`..`######` heading sits in the notes column aligned with the body and
  * the cue|notes line runs through it — matching Reading view. Only in-region
- * headings carry the class (livePreview.ts); orphan headings keep the content's
- * default indent with no divider. */
-.cornell-note .cm-line.cornell-heading-line {
+ * headings carry the marker (livePreview.ts); orphan headings keep the
+ * content's default indent with no divider. */
+.cornell-note .cm-line[data-cornell-line="heading"] {
   border-left: var(--cue-line);
   padding-left: 15px;
   /* A `#`..`######` heading as a cue's first notes line carries Obsidian's
@@ -602,15 +602,16 @@
  * so the divider reads as one continuous block line — matching Reading view.
  *
  * The `:not()` clauses exclude the cue, summary and title embed-blocks (their
- * wrapper classes are stamped by livePreview.ts — the former `:has()` content
- * selectors here were flagged by the community CSS lint for invalidation
- * cost): cues live in the left margin (no divider), the summary is stripped
- * to plain prose, and the title owns its margins in its own rule below.
- * Everything else (table / image / admonition) gets the line. */
+ * `data-cornell-slot` is stamped by livePreview.ts, the same vocabulary the
+ * Reading-view post-processor uses — the former `:has()` content selectors
+ * here were flagged by the community CSS lint for invalidation cost): cues
+ * live in the left margin (no divider), the summary is stripped to plain
+ * prose, and the title owns its margins in its own rule below. Everything
+ * else (table / image / admonition) gets the line. */
 .cornell-note
-  .cm-embed-block:not(.cornell-embed-cue):not(.cornell-embed-summary):not(
-    .cornell-embed-title
-  ) {
+  .cm-embed-block:not([data-cornell-slot="cue"]):not(
+    [data-cornell-slot="summary"]
+  ):not([data-cornell-slot="title"]) {
   border-left: var(--cue-line);
   padding-left: 15px;
   /* Obsidian gives embed-blocks their own horizontal margin, which would push
@@ -661,7 +662,7 @@
  * the cue then floated above its notes by exactly the blank-line count (the
  * reported cue/notes misalignment). `line-height: 0` zeroes the empty line's
  * inline box too, so nothing keeps the row open. */
-.cornell-note .cm-line.cornell-collapsed-gap {
+.cornell-note .cm-line[data-cornell-line="gap"] {
   height: 0 !important;
   min-height: 0 !important;
   line-height: 0 !important;
@@ -672,7 +673,7 @@
 
 /* Cursor on a collapsed-gap line: restore full height so it stays editable.
  * Extra `.cm-active` specificity + `!important` beats the collapsed rule above. */
-.cornell-note .cm-line.cornell-collapsed-gap.cm-active {
+.cornell-note .cm-line[data-cornell-line="gap"].cm-active {
   height: auto !important;
   min-height: 1em !important;
   line-height: var(--line-height) !important;
@@ -702,7 +703,7 @@
  * reported cue/notes misalignment. Zeroing the height collapses the wrapper;
  * the absolute callout still paints (it's out of flow, lifted by z-index), and
  * the first notes line rises onto the cue's row. */
-.cornell-note .cm-embed-block.cm-callout.cornell-embed-cue {
+.cornell-note .cm-embed-block.cm-callout[data-cornell-slot="cue"] {
   padding: 0 !important;
   margin: 0 !important;
   height: 0 !important;
@@ -731,7 +732,7 @@
  * absolute positioning and shift it into the cue column via negative
  * margin instead, restoring natural height. Subsequent invalid cues
  * land below via normal flow. */
-.cornell-note .cm-embed-block.cm-callout.cornell-embed-invalid {
+.cornell-note .cm-embed-block.cm-callout[data-cornell-invalid] {
   /* `height: auto` undoes the `height: 0` collapse from the base rule above
    * (this rule sits later in the file, so it wins the equal-specificity tie):
    * an invalid cue's callout is in normal flow (not absolute), so its wrapper
@@ -764,13 +765,13 @@
 /* Strip the CM6 embed-block chrome around the rendered summary so it reads as
  * plain prose. The notes/summary separator is NOT drawn here: Obsidian can nest
  * two `.cm-embed-block.cm-callout` wrappers around one rendered callout, and
- * livePreview.ts stamps `cornell-embed-summary` on BOTH (matching the old
+ * livePreview.ts stamps the summary slot attribute on BOTH (matching the old
  * descendant `:has(summary)`), so a border here would paint twice — the
  * reported "summary has 2 lines" bug. The border instead lives on the inner
  * `.callout[data-callout="summary"]` (rule below), which is unique per summary,
  * so the separator draws exactly once regardless of wrapper nesting. The top
  * margin (`--cue-gap`) here gives the band breathing room above the rule. */
-.cornell-note .cm-embed-block.cm-callout.cornell-embed-summary {
+.cornell-note .cm-embed-block.cm-callout[data-cornell-slot="summary"] {
   padding: 0 !important;
   margin: var(--cue-gap) 0 0 0 !important;
   contain: none !important;
@@ -795,7 +796,7 @@
  * plugin has always shipped (an earlier negative-margin pull to full width was
  * silently overridden by the divider rule's more specific `margin-left: 0
  * !important`, so the notes-column placement is the established look). */
-.cornell-note .cm-embed-block.cm-callout.cornell-embed-title {
+.cornell-note .cm-embed-block.cm-callout[data-cornell-slot="title"] {
   padding: 0 !important;
   /* `--cornell-title-gap` below the title is the controlled breathing room that
    * replaces the literal blank source lines (now collapsed by the classifier's
@@ -822,11 +823,13 @@
  * this padding). The title has no body, so strip the wrapper padding and the
  * inner callout's default block margin; the only space below the title is then
  * the controlled `--cornell-title-gap` on the embed-block above. */
-.cornell-note .cm-embed-block.cm-callout.cornell-embed-title .markdown-rendered {
+.cornell-note
+  .cm-embed-block.cm-callout[data-cornell-slot="title"]
+  .markdown-rendered {
   padding-bottom: 0 !important;
 }
 .cornell-note
-  .cm-embed-block.cm-callout.cornell-embed-title
+  .cm-embed-block.cm-callout[data-cornell-slot="title"]
   .callout[data-callout="title"] {
   margin-bottom: 0 !important;
 }
@@ -834,7 +837,7 @@
 /* Source-mode cue line (cursor inside, raw `> [!cue]` text visible).
  * Shifted into the cue column via negative margin so editing happens
  * visually where the rendered cue lives. */
-.cornell-note .cm-line.cornell-cue-line {
+.cornell-note .cm-line[data-cornell-line="cue"] {
   margin-left: calc(15px - var(--cue-column-offset));
   max-width: var(--cue-width);
   font-style: italic;
@@ -843,7 +846,7 @@
 /* Source-mode summary line (cursor inside, raw `> [!summary]` text
  * visible). Full-width plain prose — no cue|notes divider, matching the
  * full-width summary band in Reading view. */
-.cornell-note .cm-line.cornell-summary-line {
+.cornell-note .cm-line[data-cornell-line="summary"] {
   font-style: normal;
 }
 
@@ -855,9 +858,9 @@
  * above). Drawing it here too produced TWO separator lines in Live Preview: in
  * the render state where Obsidian shows this source line AND the rendered widget
  * at once, both border-tops painted. A single owner guarantees the rule draws
- * exactly once. livePreview.ts still tags only the first line with this class
- * (the rest keep `cornell-summary-line`). */
-.cornell-note .cm-line.cornell-summary-start {
+ * exactly once. livePreview.ts still tags only the first line with this marker
+ * (every summary line carries `data-cornell-line="summary"`). */
+.cornell-note .cm-line[data-cornell-summary-start] {
   margin-top: var(--cue-gap);
   padding-top: var(--cue-gap);
 }
@@ -866,7 +869,7 @@
  * reserved cue-column indent so it spans the full width like Reading view and
  * the rendered title widget, rather than sitting in the notes column. Stays
  * inline-editable. */
-.cornell-note .cm-line.cornell-title-line {
+.cornell-note .cm-line[data-cornell-line="title"] {
   margin-left: calc(0px - var(--cue-column-offset));
   /* Match the rendered title widget's gap below, so spacing doesn't jump when
    * the cursor enters/leaves the title's source line. */
@@ -880,7 +883,7 @@
  * the same error colour as the rendered callout, so the warning shows in both
  * the source and rendered forms. The decorator adds this class when the title
  * text exceeds the limit. */
-.cornell-note .cm-line.cornell-title-line.cornell-title-over-limit {
+.cornell-note .cm-line[data-cornell-line="title"][data-cornell-over-limit] {
   color: var(--text-error, #d33);
 }
 
@@ -890,16 +893,18 @@
  * overrides the embed-block's `margin: 0 ... !important` chrome-strip above
  * (only the top is raised; the negative left margin there is untouched). The
  * first title in the document has no preceding title and stays flush. */
-.cornell-note .cm-line.cornell-title-line ~ .cm-line.cornell-title-line,
 .cornell-note
-  .cm-line.cornell-title-line
-  ~ .cm-embed-block.cornell-embed-title,
+  .cm-line[data-cornell-line="title"]
+  ~ .cm-line[data-cornell-line="title"],
 .cornell-note
-  .cm-embed-block.cornell-embed-title
-  ~ .cm-line.cornell-title-line,
+  .cm-line[data-cornell-line="title"]
+  ~ .cm-embed-block[data-cornell-slot="title"],
 .cornell-note
-  .cm-embed-block.cornell-embed-title
-  ~ .cm-embed-block.cornell-embed-title {
+  .cm-embed-block[data-cornell-slot="title"]
+  ~ .cm-line[data-cornell-line="title"],
+.cornell-note
+  .cm-embed-block[data-cornell-slot="title"]
+  ~ .cm-embed-block[data-cornell-slot="title"] {
   margin-top: var(--cornell-page-gap) !important;
 }
 

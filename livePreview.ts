@@ -8,6 +8,11 @@ import {
 import { Range, StateEffect } from "@codemirror/state";
 import { App, MarkdownView, TFile } from "obsidian";
 import {
+  ATTR_INVALID,
+  ATTR_LINE,
+  ATTR_OVER_LIMIT,
+  ATTR_SLOT,
+  ATTR_SUMMARY_START,
   classifyBlocks,
   hasCornellCssClass,
   invalidTooltip,
@@ -16,19 +21,11 @@ import {
   type Slot,
 } from "./classifier";
 
-const CUE_LINE_CLASS = "cornell-cue-line";
-const SUMMARY_LINE_CLASS = "cornell-summary-line";
-const SUMMARY_START_CLASS = "cornell-summary-start";
-const TITLE_LINE_CLASS = "cornell-title-line";
-const BODY_LINE_CLASS = "cornell-body-line";
-const HEADING_LINE_CLASS = "cornell-heading-line";
-const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
+// Warning chrome on the callout ELEMENTS themselves (red border / red text).
+// These stay classes — they are presentation state on a single element, not
+// part of the block-marking vocabulary the data attributes carry.
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
 const TITLE_OVER_LIMIT_CLASS = "cornell-title-over-limit";
-const EMBED_CUE_CLASS = "cornell-embed-cue";
-const EMBED_SUMMARY_CLASS = "cornell-embed-summary";
-const EMBED_TITLE_CLASS = "cornell-embed-title";
-const EMBED_INVALID_CLASS = "cornell-embed-invalid";
 
 export const cornellRefreshEffect = StateEffect.define<void>();
 
@@ -134,23 +131,24 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
         // produces no decorations.
         const ranges: Range<Decoration>[] = [];
 
+        // Per-line markers use the shared vocabulary's `data-cornell-line`
+        // attribute (values mirror the slot roles), so themes and the
+        // stylesheet target one dialect across both views.
+        const lineDeco = (attrs: Record<string, string>): Decoration =>
+          Decoration.line({ attributes: attrs });
+
         for (const slot of slots) {
           if (
             slot.role === "cue" ||
             slot.role === "summary" ||
             slot.role === "title"
           ) {
-            let cls =
-              slot.role === "cue"
-                ? CUE_LINE_CLASS
-                : slot.role === "summary"
-                ? SUMMARY_LINE_CLASS
-                : TITLE_LINE_CLASS;
+            const attrs: Record<string, string> = { [ATTR_LINE]: slot.role };
             // An over-limit title's raw source line turns red too, so the error
             // shows while the cursor is inside the title (editing). The rendered
             // title callout is flagged separately on the next frame.
             if (slot.role === "title" && titleExceedsLimit(slot.content ?? "")) {
-              cls += ` ${TITLE_OVER_LIMIT_CLASS}`;
+              attrs[ATTR_OVER_LIMIT] = "";
             }
             const startLineNum = view.state.doc.lineAt(slot.sourceRange.from).number;
             const endLineNum = view.state.doc.lineAt(
@@ -158,23 +156,22 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
             ).number;
             for (let n = startLineNum; n <= endLineNum; n++) {
               const line = view.state.doc.line(n);
-              ranges.push(Decoration.line({ class: cls }).range(line.from));
+              ranges.push(lineDeco(attrs).range(line.from));
             }
             // Summary only: also tag the FIRST line so the full-width top rule
             // (the notes/summary separator) draws exactly once, not between
-            // every summary line. The first line carries both classes.
+            // every summary line. CodeMirror merges the two decorations'
+            // attribute sets (distinct keys), so the first line carries both.
             if (slot.role === "summary") {
               const firstLine = view.state.doc.line(startLineNum);
               ranges.push(
-                Decoration.line({ class: SUMMARY_START_CLASS }).range(
-                  firstLine.from
-                )
+                lineDeco({ [ATTR_SUMMARY_START]: "" }).range(firstLine.from)
               );
             }
           } else if (slot.role === "body") {
             for (const r of slot.lineRanges) {
               ranges.push(
-                Decoration.line({ class: BODY_LINE_CLASS }).range(
+                lineDeco({ [ATTR_LINE]: "body" }).range(
                   view.state.doc.lineAt(r.from).from
                 )
               );
@@ -182,7 +179,7 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
           } else if (slot.role === "gap") {
             for (const r of slot.lineRanges) {
               ranges.push(
-                Decoration.line({ class: COLLAPSED_GAP_CLASS }).range(
+                lineDeco({ [ATTR_LINE]: "gap" }).range(
                   view.state.doc.lineAt(r.from).from
                 )
               );
@@ -195,11 +192,11 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
             // In-region heading: give its line(s) the same divider + indent as
             // a body line so a heading sits in the notes column aligned with the
             // body and the cue|notes line runs through it — matching Reading
-            // view. Orphan headings (no owning cue) get no class and stay at the
-            // content's default indent, no divider.
+            // view. Orphan headings (no owning cue) get no marker and stay at
+            // the content's default indent, no divider.
             for (const r of slot.lineRanges) {
               ranges.push(
-                Decoration.line({ class: HEADING_LINE_CLASS }).range(
+                lineDeco({ [ATTR_LINE]: "heading" }).range(
                   view.state.doc.lineAt(r.from).from
                 )
               );
@@ -314,22 +311,33 @@ export function buildCalloutExpander(ctx: CalloutExpanderContext) {
 }
 
 /** Mirror the type of the callout rendered inside a `.cm-embed-block` onto the
- *  wrapper as a class. styles.css used to discover this with `:has()` content
- *  selectors, which the community CSS lint flags for their broad
- *  style-invalidation cost; a plain class on the wrapper selects the same
- *  elements for free. Like `:has()`, ANY descendant match counts — when
- *  Obsidian nests two `.cm-embed-block` wrappers around one rendered callout,
- *  both carry the class (the summary-separator CSS relies on that). The
- *  classes are inert outside Cornell notes: every rule consuming them is
- *  scoped under `.cornell-note`. */
+ *  wrapper, using the shared vocabulary's `data-cornell-slot` — the same
+ *  attribute the Reading-view post-processor stamps on its block wrappers, so
+ *  both views speak one dialect. styles.css used to discover this with
+ *  `:has()` content selectors, which the community CSS lint flags for their
+ *  broad style-invalidation cost. Like `:has()`, ANY descendant match counts —
+ *  when Obsidian nests two `.cm-embed-block` wrappers around one rendered
+ *  callout, both carry the attribute (the summary-separator CSS relies on
+ *  that). Cue wins over summary over title when nested (mirrors the export's
+ *  structural priority). The attributes are inert outside Cornell notes: every
+ *  rule consuming them is scoped under `.cornell-note`. */
 function stampEmbedBlock(block: HTMLElement): void {
   const has = (type: string): boolean =>
     block.querySelector(`.callout[data-callout="${type}"]`) !== null;
-  block.classList.toggle(EMBED_CUE_CLASS, has("cue"));
-  block.classList.toggle(EMBED_SUMMARY_CLASS, has("summary"));
-  block.classList.toggle(EMBED_TITLE_CLASS, has("title"));
-  block.classList.toggle(
-    EMBED_INVALID_CLASS,
+  const type = has("cue")
+    ? "cue"
+    : has("summary")
+    ? "summary"
+    : has("title")
+    ? "title"
+    : null;
+  if (type) {
+    block.setAttribute(ATTR_SLOT, type);
+  } else {
+    block.removeAttribute(ATTR_SLOT);
+  }
+  block.toggleAttribute(
+    ATTR_INVALID,
     block.querySelector(
       `.callout[data-callout="cue"].${INVALID_CALLOUT_CLASS}`
     ) !== null
@@ -351,7 +359,7 @@ function markInvalidCueCallouts(
     // never sees this class toggle.
     const wrapper = el.closest<HTMLElement>(".cm-embed-block");
     if (wrapper) {
-      wrapper.classList.toggle(EMBED_INVALID_CLASS, reason !== null);
+      wrapper.toggleAttribute(ATTR_INVALID, reason !== null);
     }
     if (reason) {
       el.setAttribute("title", invalidTooltip(reason));

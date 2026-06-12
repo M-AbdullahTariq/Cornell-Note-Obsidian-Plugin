@@ -408,6 +408,65 @@ export function reviewBlurInfo(
   return { blur: false, group: null };
 }
 
+/* =====================================================================
+ * Marking vocabulary
+ *
+ * The data attributes every renderer stamps onto the DOM, in one place.
+ * Reading view stamps block wrappers, Live Preview stamps editor lines and
+ * embed-block widgets, and the PDF export stamps its rendered grid — all with
+ * the names below, so the stylesheet (and any theme or snippet) has exactly
+ * one dialect to target. These names are a public surface: themes may depend
+ * on them, so renaming is a breaking change.
+ * ===================================================================== */
+
+/** Block-level role (both views + export): cue / body / summary / title /
+ *  heading / full. */
+export const ATTR_SLOT = "data-cornell-slot";
+/** Reveal-group key for review mode (Reading view). */
+export const ATTR_CUE_GROUP = "data-cornell-cue-group";
+/** Present on an in-region heading — draws the cue|notes divider through it. */
+export const ATTR_IN_REGION = "data-cornell-in-region";
+/** Present on a region's last divider-participating block — breaks the
+ *  divider line before the next cue. */
+export const ATTR_NOTES_END = "data-cornell-notes-end";
+/** Present on every page title except the document's first. */
+export const ATTR_PAGE_BREAK = "data-cornell-page-break";
+/** Present on blocks that blur in review mode until revealed. */
+export const ATTR_REVIEW_BLUR = "data-cornell-review-blur";
+/** Present on blocks the user has revealed in review mode. */
+export const ATTR_REVEALED = "data-cornell-revealed";
+/** Per-line role in Live Preview source lines: cue / body / summary / title /
+ *  heading / gap. */
+export const ATTR_LINE = "data-cornell-line";
+/** Present on a summary's first source line (carries the band's top spacing). */
+export const ATTR_SUMMARY_START = "data-cornell-summary-start";
+/** Present on an over-limit title's source line (error colour). */
+export const ATTR_OVER_LIMIT = "data-cornell-over-limit";
+/** Present on a Live Preview embed-block whose cue is invalid. */
+export const ATTR_INVALID = "data-cornell-invalid";
+
+/** An attribute assignment: string → set to that value (possibly empty for
+ *  boolean-style attributes), null → remove. Null is explicit so re-stamping a
+ *  re-rendered block always clears stale markers. */
+export type AttributeMap = Record<string, string | null>;
+
+/** Pure: the complete block-level attribute set for one slot — the single
+ *  source of truth for what the Reading-view post-processor stamps on a
+ *  grid-item wrapper. `notesEnd` is passed separately because Reading view
+ *  decides it per rendered SECTION (a slot can render as several sections and
+ *  only the one holding the region's last source line breaks the divider). */
+export function slotAttributes(slot: Slot, notesEnd: boolean): AttributeMap {
+  const review = reviewBlurInfo(slot);
+  return {
+    [ATTR_SLOT]: slot.isHeading ? "heading" : slot.role,
+    [ATTR_IN_REGION]: slot.isHeading && slot.cueGroup != null ? "" : null,
+    [ATTR_PAGE_BREAK]: slot.pageBreak ? "" : null,
+    [ATTR_CUE_GROUP]: review.group,
+    [ATTR_REVIEW_BLUR]: review.blur ? "" : null,
+    [ATTR_NOTES_END]: notesEnd ? "" : null,
+  };
+}
+
 /** Maximum length, in characters, of a `>[!title]` page title's text. A page
  *  title must fit on a single line; over the cap, both renderers flag the title
  *  (red text + the tooltip below) and clamp it to one line. A fixed character
