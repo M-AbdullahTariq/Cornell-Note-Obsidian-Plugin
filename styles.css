@@ -791,18 +791,20 @@
 
 /* Same treatment for the rendered title widget (cursor outside the title):
  * strip the embed-block chrome so the title reads as a plain line, matching
- * the shared inner-callout stripping above. The widget keeps `margin-left: 0`
- * and renders centered within the NOTES column — this codifies the layout the
- * plugin has always shipped (an earlier negative-margin pull to full width was
- * silently overridden by the divider rule's more specific `margin-left: 0
- * !important`, so the notes-column placement is the established look). */
+ * the shared inner-callout stripping above. The negative left margin pulls the
+ * widget out of the reserved cue-column indent so the title spans and centers
+ * on the FULL sheet width — matching Reading view, the export, and the title's
+ * own source line, so the title no longer jumps when the cursor enters or
+ * leaves it. (This pull was authored long ago but sat dead under the divider
+ * rule's more specific `margin-left: 0 !important` until that rule started
+ * excluding title embeds; it is live — and intended — now.) */
 .cornell-note .cm-embed-block.cm-callout[data-cornell-slot="title"] {
   padding: 0 !important;
   /* `--cornell-title-gap` below the title is the controlled breathing room that
    * replaces the literal blank source lines (now collapsed by the classifier's
    * title gap slots), so the editing view matches Reading view instead of
    * showing the large raw-blank-line gap. */
-  margin: 0 0 var(--cornell-title-gap) 0 !important;
+  margin: 0 0 var(--cornell-title-gap) calc(0px - var(--cue-column-offset)) !important;
   /* Like the cue widget, CodeMirror gives this callout widget an explicit
    * measured height that's taller than the one-line title, leaving dead space
    * below the title that pushed the first cue far down. `height: auto` shrinks
