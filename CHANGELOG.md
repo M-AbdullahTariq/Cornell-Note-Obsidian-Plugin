@@ -5,6 +5,20 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1]
+
+### Fixed
+
+- **Clicks in Live Preview land on the correct line.** Vertical spacing
+  around the page title, the notes/summary separator, and the page-break gap
+  was applied as CSS margins, which CodeMirror's height model does not
+  measure — so clicks resolved against stale geometry and drifted downward,
+  worst on the last notes line before the summary (the cursor jumped into the
+  summary). All vertical spacing on editor lines and block widgets is now
+  padding; the layout is visually unchanged. Guarded by a stylesheet
+  regression test and a headless click-mapping harness
+  (`node tests/lpclick-harness/run.mjs`).
+
 ## [1.3.0]
 
 ### Added

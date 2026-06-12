@@ -1,7 +1,7 @@
 {
   "id": "cornell-notes-pro",
   "name": "Cornell Notes Pro",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "minAppVersion": "1.5.0",
   "description": "Cornell-style note layout using native callouts. Cue callouts render in a left margin column, summary callouts at the bottom.",
   "author": "M-AbdullahTariq",
