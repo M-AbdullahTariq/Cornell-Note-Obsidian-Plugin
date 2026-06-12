@@ -235,8 +235,9 @@
  * Reading view layout — CSS Grid
  *
  * Each top-level block in `.markdown-preview-sizer` lives in its own
- * wrapper `<div>`. We classify wrappers by their content via `:has()` and
- * place them into one of three grid tracks:
+ * wrapper `<div>`. The post-processor stamps each wrapper with its slot role
+ * (`data-cornell-slot`) and the rules below place them into one of three
+ * grid tracks:
  *
  *   col 1: cue column
  *   col 2: gap
@@ -263,10 +264,10 @@
    * their natural height from the top; the reserved height becomes ordinary
    * empty space below. Do not remove. */
   align-content: start;
-  /* Default block flow gives wrappers some vertical margin; preserve that
-   * by letting row-gap stay 0 and relying on the wrappers' own margins. */
-  row-gap: 0;
-  column-gap: 0;
+  /* No grid gaps are declared: `gap` already defaults to 0 on a grid container
+   * (`normal` computes to 0 here, unlike multi-column), so blocks butt together
+   * and the divider reads as ONE continuous line. The wrappers' own margins
+   * provide the vertical rhythm. */
   /* Padding below the last block so the note (typically the summary) never sits
    * flush against the bottom edge. Shows on the export/preview grid and on long
    * notes; on the interactive sizer Obsidian's large reserved min-height already
@@ -310,7 +311,7 @@
 /* Body → body column, with the divider line. `align-self: stretch` makes each
  * body wrapper fill its full grid-row height (overriding the grid's
  * `align-items: start`), so the border-left covers the whole row — including
- * the empty space beside a taller cue. With `row-gap: 0` and no inter-block
+ * the empty space beside a taller cue. With no grid row gap and no inter-block
  * margin, consecutive body blocks in the same cue's notes region butt together
  * into ONE continuous divider line (paragraph → table → list, all connected).
  * Without stretch the border only spanned each block's own height, leaving the
@@ -600,12 +601,15 @@
  * any other widget block under a cue all need the same border-left + padding
  * so the divider reads as one continuous block line — matching Reading view.
  *
- * The two `:not(:has(...))` clauses exclude the cue and summary embed-blocks:
- * cues live in the left margin (no divider) and the summary is stripped to
- * plain prose. Everything else (table / image / admonition) gets the line. */
+ * The `:not()` clauses exclude the cue, summary and title embed-blocks (their
+ * wrapper classes are stamped by livePreview.ts — the former `:has()` content
+ * selectors here were flagged by the community CSS lint for invalidation
+ * cost): cues live in the left margin (no divider), the summary is stripped
+ * to plain prose, and the title owns its margins in its own rule below.
+ * Everything else (table / image / admonition) gets the line. */
 .cornell-note
-  .cm-embed-block:not(:has(.callout[data-callout="cue"])):not(
-    :has(.callout[data-callout="summary"])
+  .cm-embed-block:not(.cornell-embed-cue):not(.cornell-embed-summary):not(
+    .cornell-embed-title
   ) {
   border-left: var(--cue-line);
   padding-left: 15px;
@@ -698,7 +702,7 @@
  * reported cue/notes misalignment. Zeroing the height collapses the wrapper;
  * the absolute callout still paints (it's out of flow, lifted by z-index), and
  * the first notes line rises onto the cue's row. */
-.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="cue"]) {
+.cornell-note .cm-embed-block.cm-callout.cornell-embed-cue {
   padding: 0 !important;
   margin: 0 !important;
   height: 0 !important;
@@ -727,10 +731,9 @@
  * absolute positioning and shift it into the cue column via negative
  * margin instead, restoring natural height. Subsequent invalid cues
  * land below via normal flow. */
-.cornell-note .cm-embed-block.cm-callout:has(
-  .callout[data-callout="cue"].cornell-invalid
-) {
-  /* `height: auto` undoes the `height: 0` collapse from the base rule above:
+.cornell-note .cm-embed-block.cm-callout.cornell-embed-invalid {
+  /* `height: auto` undoes the `height: 0` collapse from the base rule above
+   * (this rule sits later in the file, so it wins the equal-specificity tie):
    * an invalid cue's callout is in normal flow (not absolute), so its wrapper
    * must keep natural height to actually show it stacked. */
   height: auto !important;
@@ -760,13 +763,14 @@
 
 /* Strip the CM6 embed-block chrome around the rendered summary so it reads as
  * plain prose. The notes/summary separator is NOT drawn here: Obsidian can nest
- * two `.cm-embed-block.cm-callout` wrappers around one rendered callout, and a
- * descendant `:has(summary)` then matches BOTH, painting the top border twice —
- * the reported "summary has 2 lines" bug. The border instead lives on the inner
+ * two `.cm-embed-block.cm-callout` wrappers around one rendered callout, and
+ * livePreview.ts stamps `cornell-embed-summary` on BOTH (matching the old
+ * descendant `:has(summary)`), so a border here would paint twice — the
+ * reported "summary has 2 lines" bug. The border instead lives on the inner
  * `.callout[data-callout="summary"]` (rule below), which is unique per summary,
  * so the separator draws exactly once regardless of wrapper nesting. The top
  * margin (`--cue-gap`) here gives the band breathing room above the rule. */
-.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="summary"]) {
+.cornell-note .cm-embed-block.cm-callout.cornell-embed-summary {
   padding: 0 !important;
   margin: var(--cue-gap) 0 0 0 !important;
   contain: none !important;
@@ -786,16 +790,18 @@
 
 /* Same treatment for the rendered title widget (cursor outside the title):
  * strip the embed-block chrome so the title reads as a plain line, matching
- * the shared inner-callout stripping above. The negative left margin pulls it
- * out of the reserved cue-column indent so it spans the full width, like the
- * Reading-view title. */
-.cornell-note .cm-embed-block.cm-callout:has(.callout[data-callout="title"]) {
+ * the shared inner-callout stripping above. The widget keeps `margin-left: 0`
+ * and renders centered within the NOTES column — this codifies the layout the
+ * plugin has always shipped (an earlier negative-margin pull to full width was
+ * silently overridden by the divider rule's more specific `margin-left: 0
+ * !important`, so the notes-column placement is the established look). */
+.cornell-note .cm-embed-block.cm-callout.cornell-embed-title {
   padding: 0 !important;
   /* `--cornell-title-gap` below the title is the controlled breathing room that
    * replaces the literal blank source lines (now collapsed by the classifier's
    * title gap slots), so the editing view matches Reading view instead of
    * showing the large raw-blank-line gap. */
-  margin: 0 0 var(--cornell-title-gap) calc(0px - var(--cue-column-offset)) !important;
+  margin: 0 0 var(--cornell-title-gap) 0 !important;
   /* Like the cue widget, CodeMirror gives this callout widget an explicit
    * measured height that's taller than the one-line title, leaving dead space
    * below the title that pushed the first cue far down. `height: auto` shrinks
@@ -816,13 +822,11 @@
  * this padding). The title has no body, so strip the wrapper padding and the
  * inner callout's default block margin; the only space below the title is then
  * the controlled `--cornell-title-gap` on the embed-block above. */
-.cornell-note
-  .cm-embed-block.cm-callout:has(.callout[data-callout="title"])
-  .markdown-rendered {
+.cornell-note .cm-embed-block.cm-callout.cornell-embed-title .markdown-rendered {
   padding-bottom: 0 !important;
 }
 .cornell-note
-  .cm-embed-block.cm-callout:has(.callout[data-callout="title"])
+  .cm-embed-block.cm-callout.cornell-embed-title
   .callout[data-callout="title"] {
   margin-bottom: 0 !important;
 }
@@ -889,13 +893,13 @@
 .cornell-note .cm-line.cornell-title-line ~ .cm-line.cornell-title-line,
 .cornell-note
   .cm-line.cornell-title-line
-  ~ .cm-embed-block:has(.callout[data-callout="title"]),
+  ~ .cm-embed-block.cornell-embed-title,
 .cornell-note
-  .cm-embed-block:has(.callout[data-callout="title"])
+  .cm-embed-block.cornell-embed-title
   ~ .cm-line.cornell-title-line,
 .cornell-note
-  .cm-embed-block:has(.callout[data-callout="title"])
-  ~ .cm-embed-block:has(.callout[data-callout="title"]) {
+  .cm-embed-block.cornell-embed-title
+  ~ .cm-embed-block.cornell-embed-title {
   margin-top: var(--cornell-page-gap) !important;
 }
 
@@ -951,13 +955,16 @@ body.cornell-printing .cornell-pdf-export-holder {
 }
 
 /* One Cornell page per printed sheet: every `>[!title]` preceded by an earlier
- * title starts a fresh page. `break-before: page` is a no-op in continuous
- * (screen) media and only takes effect when the export paginates. */
+ * title starts a fresh page. Page breaks are a no-op in continuous (screen)
+ * media and only take effect when the export paginates. The legacy
+ * `page-break-*` spelling is used throughout this section: Chromium (the only
+ * engine the export runs in) treats it as a full alias of the modern
+ * `break-*`, and the modern form trips the community CSS lint's
+ * partially-supported-feature warning. */
 body.cornell-printing
   :is(.markdown-preview-sizer, .cornell-grid)
   > [data-cornell-slot="title"]
   ~ [data-cornell-slot="title"] {
-  break-before: page;
   page-break-before: always;
 }
 
@@ -967,7 +974,6 @@ body.cornell-printing
   .cornell-pdf-export-holder
   > .cornell-grid
   ~ .cornell-grid {
-  break-before: page;
   page-break-before: always;
 }
 
@@ -975,7 +981,6 @@ body.cornell-printing
 body.cornell-printing
   :is(.markdown-preview-sizer, .cornell-grid)
   > :is([data-cornell-slot="cue"], [data-cornell-slot="body"]) {
-  break-inside: avoid;
   page-break-inside: avoid;
 }
 
@@ -1108,8 +1113,10 @@ body.cornell-printing
   overflow: hidden;
 }
 
-/* Capture webview — behind the native preview, filling the host. */
-.cornell-pdf-export-host webview {
+/* Capture webview — behind the native preview, filling the host. Selected via
+ * the class pdfExport.ts stamps on it (`webview` is not a standard HTML type
+ * selector, so the element name can't be used in CSS). */
+.cornell-pdf-export-host .cornell-pdf-capture {
   position: absolute;
   inset: 0;
   width: 100%;

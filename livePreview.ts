@@ -25,6 +25,10 @@ const HEADING_LINE_CLASS = "cornell-heading-line";
 const COLLAPSED_GAP_CLASS = "cornell-collapsed-gap";
 const INVALID_CALLOUT_CLASS = "cornell-invalid";
 const TITLE_OVER_LIMIT_CLASS = "cornell-title-over-limit";
+const EMBED_CUE_CLASS = "cornell-embed-cue";
+const EMBED_SUMMARY_CLASS = "cornell-embed-summary";
+const EMBED_TITLE_CLASS = "cornell-embed-title";
+const EMBED_INVALID_CLASS = "cornell-embed-invalid";
 
 export const cornellRefreshEffect = StateEffect.define<void>();
 
@@ -37,9 +41,41 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
     class {
       decorations: DecorationSet;
       private rebuildTimer: number | null = null;
+      /** Re-stamps embed-block wrapper classes whenever Obsidian (re)builds
+       *  widget DOM. Widgets appear/disappear on cursor moves and scrolling —
+       *  events that never reach `build()` — and their callout content is
+       *  populated asynchronously, so a DOM observer is the one hook that sees
+       *  every case. It runs as a microtask after each mutation, BEFORE the
+       *  next paint, so the stamped classes never flash. */
+      private embedObserver: MutationObserver;
 
       constructor(view: EditorView) {
         this.decorations = this.build(view);
+        this.embedObserver = new MutationObserver((records) => {
+          const touched = new Set<HTMLElement>();
+          for (const record of records) {
+            const target = record.target;
+            if (target.instanceOf(HTMLElement)) {
+              const host = target.closest<HTMLElement>(".cm-embed-block");
+              if (host) touched.add(host);
+            }
+            record.addedNodes.forEach((node) => {
+              if (!node.instanceOf(HTMLElement)) return;
+              if (node.matches(".cm-embed-block")) touched.add(node);
+              node
+                .querySelectorAll<HTMLElement>(".cm-embed-block")
+                .forEach((block) => touched.add(block));
+            });
+          }
+          touched.forEach(stampEmbedBlock);
+        });
+        this.embedObserver.observe(view.dom, {
+          childList: true,
+          subtree: true,
+        });
+        view.dom
+          .querySelectorAll<HTMLElement>(".cm-embed-block")
+          .forEach(stampEmbedBlock);
       }
 
       update(update: ViewUpdate) {
@@ -81,6 +117,7 @@ export function buildCornellEditorExtension(ctx: CornellExtensionContext) {
 
       destroy() {
         this.cancelPendingRebuild();
+        this.embedObserver.disconnect();
       }
 
       build(view: EditorView): DecorationSet {
@@ -276,6 +313,29 @@ export function buildCalloutExpander(ctx: CalloutExpanderContext) {
   );
 }
 
+/** Mirror the type of the callout rendered inside a `.cm-embed-block` onto the
+ *  wrapper as a class. styles.css used to discover this with `:has()` content
+ *  selectors, which the community CSS lint flags for their broad
+ *  style-invalidation cost; a plain class on the wrapper selects the same
+ *  elements for free. Like `:has()`, ANY descendant match counts — when
+ *  Obsidian nests two `.cm-embed-block` wrappers around one rendered callout,
+ *  both carry the class (the summary-separator CSS relies on that). The
+ *  classes are inert outside Cornell notes: every rule consuming them is
+ *  scoped under `.cornell-note`. */
+function stampEmbedBlock(block: HTMLElement): void {
+  const has = (type: string): boolean =>
+    block.querySelector(`.callout[data-callout="${type}"]`) !== null;
+  block.classList.toggle(EMBED_CUE_CLASS, has("cue"));
+  block.classList.toggle(EMBED_SUMMARY_CLASS, has("summary"));
+  block.classList.toggle(EMBED_TITLE_CLASS, has("title"));
+  block.classList.toggle(
+    EMBED_INVALID_CLASS,
+    block.querySelector(
+      `.callout[data-callout="cue"].${INVALID_CALLOUT_CLASS}`
+    ) !== null
+  );
+}
+
 function markInvalidCueCallouts(
   view: EditorView,
   reasons: (Slot["invalid"] | null)[]
@@ -286,6 +346,13 @@ function markInvalidCueCallouts(
   cueEls.forEach((el, idx) => {
     const reason = reasons[idx] ?? null;
     el.classList.toggle(INVALID_CALLOUT_CLASS, reason !== null);
+    // Mirror the invalid state onto the embed-block wrapper directly: the
+    // observer in the view plugin only watches childList mutations, so it
+    // never sees this class toggle.
+    const wrapper = el.closest<HTMLElement>(".cm-embed-block");
+    if (wrapper) {
+      wrapper.classList.toggle(EMBED_INVALID_CLASS, reason !== null);
+    }
     if (reason) {
       el.setAttribute("title", invalidTooltip(reason));
     } else {

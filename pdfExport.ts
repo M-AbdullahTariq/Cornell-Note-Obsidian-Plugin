@@ -336,6 +336,9 @@ export async function prepareExportWebview(
   const win = activeWindow;
 
   const webview = doc.createElement("webview") as PrintWebview;
+  // Styling hook: `webview` is not a standard HTML type selector (the
+  // community CSS lint rejects it), so styles.css targets this class instead.
+  webview.classList.add("cornell-pdf-capture");
   webview.setAttribute("src", "app://obsidian.md/help.html");
   webview.setAttribute("nodeintegration", "true");
   // Electron throttles a zero-size webview (it then prints blank), so it must
