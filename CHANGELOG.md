@@ -5,6 +5,39 @@ All notable changes to the Cornell Notes plugin are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0]
+
+### Added
+
+- **Stable theming attributes.** Every Cornell block is marked with documented
+  `data-cornell-*` attributes — block roles, editor-line roles, review-mode
+  markers — shared by Reading view, Live Preview, and the PDF export. The
+  vocabulary is listed in the README and treated as a public surface for
+  themes and CSS snippets.
+
+### Changed
+
+- **The Live Preview title is now full-width.** The rendered `>[!title]`
+  widget spans and centers on the full sheet width, matching Reading view, the
+  PDF export, and the title's own source line — so the title no longer shifts
+  sideways when the cursor enters or leaves it. (Previously the rendered
+  widget sat centered within the notes column.)
+- **One classification authority everywhere.** The PDF export now derives
+  block placement from the same classifier both live views use, mapping its
+  slots onto the rendered blocks by document order; the old DOM-only rule-set
+  survives only as the fallback for Obsidian's built-in Export to PDF, and
+  runs through the same mapper. Review-mode reveal semantics moved into a
+  pure, unit-tested state model. The test suite grew from 32 to 56 tests.
+
+### Fixed
+
+- **Community CSS lint warnings resolved.** All `:has()` selectors are
+  replaced by attributes the plugin stamps directly (no more broad selector
+  invalidation), the grid no longer declares multicolumn-flagged gap
+  properties, print rules use the legacy `page-break-*` spellings Chromium
+  aliases natively, and the PDF capture element is selected by class instead
+  of the non-standard `webview` type selector.
+
 ## [1.2.2]
 
 ### Changed
