@@ -454,60 +454,94 @@
   --cornell-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* What blurs in each blurrable wrapper:
- *  - body wrappers: their whole content (`> *`).
+/* What hides in review mode:
+ *  - body wrappers: the whole wrapper region.
  *  - summary wrapper: ONLY the callout body (`.callout-content`). The summary
  *    title — "Summary" or a custom one like "Key Take Away" — stays visible as
  *    a prompt, exactly like a cue title.
- * Cues, headings, the page title, and rules are never blurred. The blur always
- * lands on content, never the wrapper, so the cue|notes divider and the
- * notes/summary separator (borders ON the wrapper) stay crisp. The sharp /
- * revealed state is the default; the reveal is the smooth path. */
+ * Cues, headings, the page title, and rules are never hidden.
+ *
+ * HOW it hides: a single frosted overlay (`::after` with `backdrop-filter`)
+ * per hidden region — NOT a `filter: blur()` on each child. Per-child filters
+ * blur each paragraph/list/table separately, so the glow bled past every
+ * block's edges (over the cue|notes divider) and visible seams opened between
+ * adjacent blocks — the harsh-edged look. One overlay pane blurs the whole
+ * region evenly, ends exactly at the region's edge, and leaves the divider
+ * and separator borders crisp: `inset: 0` spans the padding box, INSIDE the
+ * wrapper's border. The element below only anchors the overlay. */
 .cornell-note
   .markdown-preview-sizer.cornell-review
-  > [data-cornell-review-blur]:not([data-cornell-slot="summary"])
-  > *,
+  > [data-cornell-review-blur]:not([data-cornell-slot="summary"]),
 .cornell-note
   .markdown-preview-sizer.cornell-review
   > [data-cornell-slot="summary"][data-cornell-review-blur]
   .callout-content {
-  filter: blur(0);
-  opacity: 1;
-  transition: filter 220ms var(--cornell-ease-out),
-    opacity 220ms var(--cornell-ease-out);
+  position: relative;
 }
 
-/* Hidden state: blur + dim the content so the reveal has something to animate
- * toward. Re-blur (hiding) is snappier than the reveal — fast where the system
- * responds, smoother where the answer is unveiled. `user-select: none` keeps
- * blurred text unselectable; it returns to normal once revealed. */
+/* The frosted pane. The theme-tinted veil dims the hidden text (replacing the
+ * old `opacity: 0.6` dim) and keeps it unreadable even at small blur radii.
+ * The 140ms transition is the RE-BLUR timing — snappy where the system
+ * responds; the slower reveal lives on the revealed state below. */
 .cornell-note
   .markdown-preview-sizer.cornell-review
-  > [data-cornell-review-blur]:not([data-cornell-revealed]):not([data-cornell-slot="summary"])
-  > *,
+  > [data-cornell-review-blur]:not([data-cornell-slot="summary"])::after,
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"][data-cornell-review-blur]
+  .callout-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  background-color: color-mix(in srgb, var(--background-primary) 35%, transparent);
+  border-radius: 4px;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 140ms var(--cornell-ease-out), visibility 0s;
+}
+
+/* Revealed: the pane fades out (220ms — clarity arrives immediately on click,
+ * then settles), and `visibility` flips after the fade so the overlay stops
+ * sitting above the content once it's invisible. */
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-review-blur][data-cornell-revealed]:not([data-cornell-slot="summary"])::after,
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-slot="summary"][data-cornell-review-blur][data-cornell-revealed]
+  .callout-content::after {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 220ms var(--cornell-ease-out),
+    visibility 0s linear 220ms;
+}
+
+/* Hidden text stays unselectable (select-all, keyboard selection); selection
+ * returns to normal once revealed. */
+.cornell-note
+  .markdown-preview-sizer.cornell-review
+  > [data-cornell-review-blur]:not([data-cornell-revealed]):not([data-cornell-slot="summary"]),
 .cornell-note
   .markdown-preview-sizer.cornell-review
   > [data-cornell-slot="summary"][data-cornell-review-blur]:not([data-cornell-revealed])
   .callout-content {
-  filter: blur(8px);
-  opacity: 0.6;
   user-select: none;
-  transition: filter 140ms var(--cornell-ease-out),
-    opacity 140ms var(--cornell-ease-out);
 }
 
-/* Reduced motion: keep the blur/clarity end states (they aid comprehension)
+/* Reduced motion: keep the hidden/revealed end states (they aid comprehension)
  * but drop the timing so there's no animated motion. */
 @media (prefers-reduced-motion: reduce) {
   .cornell-note
     .markdown-preview-sizer.cornell-review
-    > [data-cornell-review-blur]:not([data-cornell-slot="summary"])
-    > *,
+    > [data-cornell-review-blur]:not([data-cornell-slot="summary"])::after,
   .cornell-note
     .markdown-preview-sizer.cornell-review
     > [data-cornell-slot="summary"][data-cornell-review-blur]
-    .callout-content {
-    transition-duration: 1ms;
+    .callout-content::after {
+    transition-duration: 1ms, 0s;
+    transition-delay: 0s;
   }
 }
 
@@ -991,13 +1025,19 @@ body.cornell-printing
   page-break-inside: avoid;
 }
 
-/* A PDF is a finished study sheet — never carry review-mode blur into it. */
-body.cornell-printing [data-cornell-review-blur] > *,
+/* A PDF is a finished study sheet — never carry review-mode hiding into it.
+ * The export stamping already strips the blur markers; this is the belt-and-
+ * braces layer that kills any leftover frosted overlay and restores selection. */
+body.cornell-printing [data-cornell-review-blur]::after,
+body.cornell-printing
+  [data-cornell-slot="summary"][data-cornell-review-blur]
+  .callout-content::after {
+  display: none !important;
+}
+body.cornell-printing [data-cornell-review-blur],
 body.cornell-printing
   [data-cornell-slot="summary"][data-cornell-review-blur]
   .callout-content {
-  filter: none !important;
-  opacity: 1 !important;
   user-select: auto !important;
 }
 
